@@ -1,0 +1,985 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Load Lines — Triode Amplifier Sandbox</title>
+<style>
+  :root {
+    --bg: #15181d;
+    --panel: #1d2128;
+    --panel-2: #262b33;
+    --line: #2f3540;
+    --text: #d8dde5;
+    --text-dim: #8a93a3;
+    --accent: #ffd34d;
+    --loadline: #6fff8a;
+    --loadline-dim: #a8ffb8;
+    --qpoint: #ffd34d;
+    --swing: #5fb4ff;
+    --curve: #6b7180;
+    --curve-hi: #c1c8d4;
+    --bad: #ff7a7a;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px;
+  }
+  body { display: flex; flex-direction: column; min-height: 100vh; }
+  header {
+    padding: 10px 18px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 18px;
+    flex: 0 0 auto;
+  }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; letter-spacing: 0.02em; }
+  header .sub { color: var(--text-dim); font-size: 12px; }
+  .tabs { margin-left: auto; display: flex; gap: 6px; }
+  .tab {
+    padding: 6px 14px; border-radius: 6px;
+    background: var(--panel); color: var(--text-dim);
+    cursor: pointer; user-select: none; border: 1px solid var(--line);
+  }
+  .tab.active { background: var(--accent); color: #1a1a1a; border-color: var(--accent); font-weight: 600; }
+
+  main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    gap: 14px; padding: 14px;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  @media (max-width: 1100px) {
+    main { grid-template-columns: 1fr; }
+  }
+
+  .left-col {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .plotwrap {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px; position: relative;
+    min-height: 0; min-width: 0;
+    overflow: hidden;
+    flex: 0 0 auto;
+  }
+  #plot {
+    width: 100%;
+    aspect-ratio: 16 / 11;
+    max-height: calc(100vh - 300px);
+    display: block;
+    margin: 0 auto;
+  }
+  canvas { display: block; }
+  #waves { width: 100%; height: 80px; }
+  .readout {
+    position: absolute; top: 22px; right: 22px;
+    background: rgba(20,23,28,0.85); border: 1px solid var(--line);
+    border-radius: 6px; padding: 8px 12px; font-size: 12px;
+    line-height: 1.7; min-width: 160px;
+  }
+  .readout .k {
+    color: var(--text-dim);
+    cursor: help;
+    text-decoration: underline dotted rgba(138,147,163,0.6);
+    text-underline-offset: 2px;
+  }
+  .readout .v { color: var(--text); font-variant-numeric: tabular-nums; }
+  .readout .warn { color: var(--bad); }
+
+  .sidebar { display: flex; flex-direction: column; gap: 12px; min-width: 0; min-height: 0; overflow: visible; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 14px;
+  }
+  .card h2 { font-size: 13px; margin: 0 0 10px 0; color: var(--text-dim); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
+  .lesson h3 { font-size: 15px; margin: 0 0 8px 0; }
+  .lesson p { margin: 0 0 10px 0; line-height: 1.55; color: var(--text); }
+  .lesson code { background: var(--panel-2); padding: 1px 5px; border-radius: 3px; font-size: 12px; }
+  .lesson .schematic { display: block; margin: 6px auto 10px; }
+  .lesson .schematic text { font-family: ui-sans-serif, system-ui, sans-serif; }
+  .lesson-nav {
+    display: flex; justify-content: space-between; align-items: center;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 14px;
+    flex: 0 0 auto;
+  }
+  .lesson-nav .step { color: var(--text-dim); font-size: 12px; }
+  .lesson .nav .step { color: var(--text-dim); font-size: 12px; }
+  button {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+    padding: 6px 12px; border-radius: 5px; cursor: pointer; font-size: 13px;
+  }
+  button:hover:not(:disabled) { background: #303641; }
+  button:disabled { opacity: 0.4; cursor: default; }
+  button.primary { background: var(--accent); color: #1a1a1a; border-color: var(--accent); font-weight: 600; }
+
+  .ctrl { margin-bottom: 12px; position: relative; }
+  .ctrl:last-child { margin-bottom: 0; }
+  .ctrl .row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+  .ctrl label { color: var(--text-dim); font-size: 12px; }
+  .ctrl .val { color: var(--text); font-variant-numeric: tabular-nums; font-size: 13px; }
+  .ctrl input[type=range] { width: 100%; accent-color: var(--accent); }
+  .ctrl.locked { opacity: 0.4; pointer-events: none; }
+  .ctrl.locked .val { color: var(--text-dim); }
+  .ctrl .hint {
+    position: absolute;
+    right: calc(100% + 10px);
+    top: 50%;
+    transform: translateY(-50%);
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 6px 10px;
+    font-size: 11px;
+    color: var(--text);
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 120ms;
+    z-index: 5;
+  }
+  .ctrl:hover .hint { opacity: 1; }
+  .ctrl.locked .hint { display: none; }
+
+  .signal-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .signal-row button { flex: 0 0 auto; }
+
+  .radio-group { display: flex; gap: 10px; flex-wrap: wrap; }
+  .radio-group label {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 12px; color: var(--text); cursor: pointer; user-select: none;
+  }
+  .radio-group input[type=radio] { accent-color: var(--accent); margin: 0; }
+  .tube-info { margin-top: 6px; font-size: 11px; color: var(--text-dim); }
+  .tube-info .v { color: var(--text); font-variant-numeric: tabular-nums; margin-left: 2px; }
+
+  .waves { width: 100%; height: 80px; display: block; background: var(--panel-2); border-radius: 5px; margin-top: 6px; }
+
+  footer { color: var(--text-dim); font-size: 11px; padding: 6px 14px 10px; flex: 0 0 auto; border-top: 1px solid var(--line); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Load Lines</h1>
+  <span class="sub">Triode amplifier sandbox &middot; DC load line &middot; <span style="color:#6fff8a">phosphor build</span></span>
+  <div class="tabs">
+    <div class="tab active" id="tab-lesson">Lesson</div>
+    <div class="tab" id="tab-sandbox">Sandbox</div>
+  </div>
+</header>
+
+<main>
+  <div class="left-col">
+    <div class="plotwrap">
+      <canvas id="plot"></canvas>
+      <div class="readout" id="readout"></div>
+    </div>
+
+    <div class="lesson-nav" id="lessonNav">
+      <button id="prevBtn">&larr; Prev</button>
+      <span class="step" id="lessonStep"></span>
+      <button id="nextBtn" class="primary">Next &rarr;</button>
+    </div>
+
+    <div class="card lesson" id="lessonCard">
+      <h3 id="lessonTitle"></h3>
+      <div id="lessonBody"></div>
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="card">
+      <h2>Controls</h2>
+
+      <div class="ctrl" data-ctrl="tube">
+        <div class="row"><label>Tube</label></div>
+        <div class="radio-group" id="tubeGroup">
+          <label><input type="radio" name="tube" value="12AX7" checked> 12AX7</label>
+          <label><input type="radio" name="tube" value="12AT7"> 12AT7</label>
+          <label><input type="radio" name="tube" value="12AU7"> 12AU7</label>
+          <label><input type="radio" name="tube" value="12AY7"> 12AY7</label>
+        </div>
+        <div class="tube-info">amplification factor &mu; = <span class="v" id="tubeMu">100</span></div>
+      </div>
+
+      <div class="ctrl" data-ctrl="ht">
+        <div class="row"><label>HT supply (B+)</label><span class="val"><span id="vHt"></span> V</span></div>
+        <input type="range" id="ht" min="100" max="400" step="5" value="250">
+      </div>
+
+      <div class="ctrl" data-ctrl="rload">
+        <div class="row"><label>Plate load R<sub>L</sub></label><span class="val"><span id="vRload"></span> k&Omega;</span></div>
+        <input type="range" id="rload" min="47" max="470" step="1" value="100">
+      </div>
+
+      <div class="ctrl" data-ctrl="rcath">
+        <div class="row"><label>Cathode resistor R<sub>k</sub></label><span class="val"><span id="vRcath"></span> &Omega;</span></div>
+        <input type="range" id="rcath" min="0" max="5000" step="50" value="0">
+      </div>
+
+      <div class="ctrl" data-ctrl="vgk">
+        <div class="row"><label>Grid bias V<sub>gk</sub></label><span class="val"><span id="vVgk"></span> V</span></div>
+        <input type="range" id="vgk" min="-5" max="0" step="0.05" value="-1.5">
+        <div class="hint" id="vgkHint">no plate current until V<sub>p</sub> reaches <span id="vgkHintVal">150</span> V</div>
+      </div>
+
+      <div class="ctrl" data-ctrl="amp">
+        <div class="row"><label>Input signal amplitude</label><span class="val"><span id="vAmp"></span> V<sub>pk</sub></span></div>
+        <input type="range" id="amp" min="0" max="3" step="0.05" value="0">
+      </div>
+
+      <div class="ctrl" data-ctrl="speed">
+        <div class="row"><label>Signal speed</label><span class="val"><span id="vSpeed"></span></span></div>
+        <input type="range" id="speed" min="0.2" max="3" step="0.1" value="1">
+      </div>
+
+      <div class="signal-row">
+        <button id="playBtn">Play</button>
+        <button id="resetBtn">Reset to defaults</button>
+      </div>
+
+      <canvas id="waves" class="waves"></canvas>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Triode model: I<sub>p</sub> = K (V<sub>p</sub> + &mu;&middot;V<sub>gk</sub>)<sup>3/2</sup> for V<sub>p</sub> + &mu;&middot;V<sub>gk</sub> &gt; 0.
+  Defaults tuned for a 12AX7-ish triode (&mu;=100). Educational simplification &mdash; not a circuit-accurate SPICE model.
+</footer>
+
+<script>
+"use strict";
+
+// ---------- Triode model ----------
+// 3/2-power-law parameters per tube type. K values are tuned to land a typical datasheet
+// operating point (Vp ~250 V) at the rough datasheet plate current — this is an educational
+// simplification, not a SPICE-grade model. μ values are from the canonical datasheets.
+const TUBES = {
+  "12AX7": { mu: 100, k: 0.00894 },  // high-μ, low-current preamp triode
+  "12AT7": { mu:  60, k: 0.00540 },  // medium-μ RF/audio triode
+  "12AU7": { mu:  17, k: 0.00800 },  // low-μ general-purpose triode
+  "12AY7": { mu:  44, k: 0.00500 },  // medium-μ, low-noise preamp triode
+};
+let MU = TUBES["12AX7"].mu;
+let K  = TUBES["12AX7"].k;
+const VGK_FAMILY = [0, -0.5, -1, -1.5, -2, -2.5, -3, -3.5, -4];
+
+function ipModel(vp, vgk) {
+  const eff = vp + MU * vgk;
+  if (eff <= 0) return 0;
+  return K * Math.pow(eff, 1.5); // mA
+}
+
+// General operating-point solver. Bisects on plate current Ip (mA) such that
+// the tube current matches the current the external circuit allows:
+//   Vp = HT - Ip*(Ra + Rk)        (plate voltage, kΩ * mA = V)
+//   Vk = Ip*Rk                    (cathode voltage)
+//   Vgk = Vgrid - Vk
+//   Ip_tube = ipModel(Vp, Vgk)    (tube law)
+//   Solve Ip_tube(Ip) = Ip.
+// Rk = 0 reduces to the fixed-bias case (Vgk = Vgrid).
+function solveOp(ht, ra, rcath, vGrid) {
+  const rTot = Math.max(ra + rcath, 0.001);
+  let lo = 0, hi = ht / rTot;
+  for (let i = 0; i < 50; i++) {
+    const mid = 0.5 * (lo + hi);
+    const vp  = ht - mid * rTot;
+    const vgk = vGrid - mid * rcath;
+    const ipTube = (vp > 0) ? ipModel(vp, vgk) : 0;
+    if (ipTube > mid) lo = mid; else hi = mid;
+  }
+  const ip  = 0.5 * (lo + hi);
+  const vp  = ht - ip * rTot;
+  const vgk = vGrid - ip * rcath;
+  return { ip, vp, vgk };
+}
+
+// Backwards-compatible wrapper for fixed-bias (cathode grounded) callers.
+function solveQ(ht, ra, vgk) { return solveOp(ht, ra, 0, vgk); }
+
+// DC grid voltage: in fixed-bias mode the slider sets Vg directly (Vk = 0 so Vgk = Vg).
+// In self-bias mode the grid is tied to ground via a leak resistor, so Vg_dc = 0.
+function gridDCNow() { return state.rcath > 0 ? 0 : state.vgk; }
+function gridAt(phase) { return gridDCNow() + state.amp * Math.sin(phase); }
+function opAt(phase) { return solveOp(state.ht, state.rk, state.rcath, gridAt(phase)); }
+function quiescent() { return solveOp(state.ht, state.rk, state.rcath, gridDCNow()); }
+
+// When self-bias is active, the Vgk slider becomes a derived display, not an input.
+function syncDerivedVgk() {
+  if (state.rcath > 0) {
+    const q = quiescent();
+    state.vgk = q.vgk;
+    $("vgk").value = state.vgk;
+  }
+}
+
+// ---------- State ----------
+const state = {
+  mode: "lesson",        // "lesson" | "sandbox"
+  tube: "12AX7",         // dual-triode type (selects μ and K)
+  ht: 250,
+  rk: 100,               // plate-load resistor in kΩ (a.k.a. R_a / R_L)
+  rcath: 0,              // cathode resistor in kΩ (0 = fixed bias / cathode grounded)
+  vgk: -1.5,             // grid-to-cathode bias in V (derived when rcath > 0)
+  amp: 0,                // grid signal peak (V)
+  speed: 1,
+  playing: false,
+  t0: 0, tNow: 0,
+  lesson: 0,
+};
+
+function applyTube() {
+  const t = TUBES[state.tube] || TUBES["12AX7"];
+  MU = t.mu;
+  K  = t.k;
+  const muEl = document.getElementById("tubeMu");
+  if (muEl) muEl.textContent = MU;
+}
+
+// ---------- Lesson chapters ----------
+const LESSONS = [
+  {
+    title: "1. The tube and its curves",
+    body: `<p>A triode's behavior is captured by its <b>plate-curve family</b>: each curve shows how plate current <code>I<sub>p</sub></code> grows with plate voltage <code>V<sub>p</sub></code> for one fixed grid voltage <code>V<sub>gk</sub></code>. Less negative grid (warmer color) = more current.</p>
+
+           <p>The horizontal spacing between adjacent curves is the tube's defining number: the <b>amplification factor &mu;</b> (Greek "mu"). Physically, &mu; describes how much more effective the grid is than the plate at controlling cathode current. The grid sits very close to the cathode and the plate is much farther away, so the grid's electric field dominates &mdash; a small grid swing influences the cathode's electron flow far more strongly than the same swing at the plate would.</p>
+
+           <p>Mathematically &mu; is the slope you'd measure if you held plate current constant and asked "how much plate voltage do I need to add to cancel out 1 V of grid voltage?":</p>
+           <p style="text-align:center"><code>&mu; = &minus;&Delta;V<sub>p</sub> / &Delta;V<sub>gk</sub></code> &nbsp;(at constant I<sub>p</sub>)</p>
+           <p>Equivalently: 1 V of grid swing has the same effect on plate current as &mu; volts of plate swing. That's why high-&mu; tubes amplify so well: a tiny input at the grid leverages a huge response at the plate. The hard ceiling on a triode stage's voltage gain is exactly &mu; (with a perfect load); a real plate resistor always gives somewhat less.</p>
+
+           <p>Switch tube types in the controls to see this directly. A <b>12AX7</b> (&mu;=100) spreads its curves far apart along <code>V<sub>p</sub></code> &mdash; a high-gain preamp triode. A <b>12AU7</b> (&mu;=17) crowds the same family of curves into a narrow strip near the Y axis &mdash; same physics, far less amplification per volt of grid swing, but it can handle more current and is more linear, which is why it shows up in cathode followers and phase inverters.</p>
+
+           <p>This is the device on its own. It says nothing yet about <i>which</i> point on the family you actually operate at &mdash; that requires a circuit.</p>
+
+           <p class="small">Adjust <b>V<sub>gk</sub></b> below to highlight one curve at a time, or switch the tube to compare families.</p>`,
+    showLoadLine: false, showQ: false, showSignal: false, hideCurves: false,
+    lock: { tube: false, ht: true, rload: true, rcath: true, vgk: false, amp: true, speed: true },
+  },
+  {
+    title: "2. Where does the load line come from?",
+    body: `<p>Stick the tube into a circuit. Bias the plate from a supply <code>HT</code> through a resistor <code>R<sub>L</sub></code>, with the cathode grounded:</p>
+      <svg class="schematic" viewBox="0 0 200 200" width="180" height="180" aria-hidden="true">
+        <text x="100" y="14" fill="#ffd34d" text-anchor="middle" font-size="11">+HT</text>
+        <line x1="100" y1="18" x2="100" y2="36" stroke="#d8dde5"/>
+        <polyline points="100,36 90,42 110,50 90,58 110,66 90,74 110,82 100,88"
+                  fill="none" stroke="#d8dde5" stroke-width="1.4"/>
+        <text x="116" y="65" fill="#a8ffb8" font-size="11">R&#8323;</text>
+        <text x="116" y="44" fill="#5fb4ff" font-size="11">I&#7616; &darr;</text>
+        <line x1="100" y1="88" x2="100" y2="125" stroke="#d8dde5"/>
+        <text x="116" y="110" fill="#5fb4ff" font-size="11">V&#7616;</text>
+        <circle cx="100" cy="138" r="24" fill="none" stroke="#d8dde5"/>
+        <line x1="88" y1="125" x2="112" y2="125" stroke="#d8dde5" stroke-width="1.6"/>
+        <line x1="86" y1="138" x2="114" y2="138" stroke="#d8dde5" stroke-dasharray="2,2"/>
+        <line x1="88" y1="151" x2="112" y2="151" stroke="#d8dde5" stroke-width="1.6"/>
+        <line x1="86" y1="138" x2="62" y2="138" stroke="#d8dde5"/>
+        <text x="42" y="142" fill="#9ad0ff" font-size="11">V&#x1D4F0;</text>
+        <line x1="100" y1="151" x2="100" y2="178" stroke="#d8dde5"/>
+        <line x1="90" y1="178" x2="110" y2="178" stroke="#d8dde5" stroke-width="1.6"/>
+        <line x1="93" y1="182" x2="107" y2="182" stroke="#d8dde5"/>
+        <line x1="96" y1="186" x2="104" y2="186" stroke="#d8dde5"/>
+      </svg>
+      <p>Plate voltage <code>V<sub>p</sub></code> and plate current <code>I<sub>p</sub></code> are no longer free &mdash; they're <i>tied together</i> by the resistor and supply. Walk Kirchhoff's voltage law around the loop top-to-bottom:</p>
+      <p style="text-align:center"><code>HT = I<sub>p</sub>&middot;R<sub>L</sub> + V<sub>p</sub></code></p>
+      <p>Rearrange for <code>I<sub>p</sub></code>:</p>
+      <p style="text-align:center"><code>I<sub>p</sub> = (HT &minus; V<sub>p</sub>) / R<sub>L</sub></code></p>
+      <p>That's a <b>straight line</b> on the I<sub>p</sub>/V<sub>p</sub> plane. Notice it has nothing to do with which tube is in the socket &mdash; it's just the constraint that the wires impose. That's the <b>load line</b>.</p>
+      <p>Move <b>HT</b> and <b>R<sub>L</sub></b>. The line slides and tilts. The tube curves are hidden here on purpose, to make it obvious the line is defined entirely by the circuit.</p>`,
+    showLoadLine: true, showQ: false, showSignal: false, hideCurves: true,
+    lock: { tube: true, ht: false, rload: false, rcath: true, vgk: true, amp: true, speed: true },
+  },
+  {
+    title: "3. Reading the load line",
+    body: `<p>Now put the tube back behind the load line. The two endpoints are easy to spot:</p>
+           <ul style="margin-top:-4px">
+             <li>If <code>I<sub>p</sub> = 0</code> &rarr; <code>V<sub>p</sub> = HT</code>. Point <code>(HT, 0)</code> on the X axis.</li>
+             <li>If <code>V<sub>p</sub> = 0</code> &rarr; <code>I<sub>p</sub> = HT / R<sub>L</sub></code>. Point <code>(0, HT/R<sub>L</sub>)</code> on the Y axis.</li>
+           </ul>
+           <p>Bigger <b>HT</b> shifts both endpoints outward. Bigger <b>R<sub>L</sub></b> drops the top endpoint, tilting the line about <code>(HT, 0)</code>. The slope is <code>&minus;1 / R<sub>L</sub></code>.</p>`,
+    showLoadLine: true, showQ: false, showSignal: false, hideCurves: false,
+    lock: { tube: true, ht: false, rload: false, rcath: true, vgk: true, amp: true, speed: true },
+  },
+  {
+    title: "4. Finding the Q-point",
+    body: `<p>The tube must satisfy <i>both</i> its own curve <i>and</i> the load line. Their intersection is the <b>quiescent operating point</b> &mdash; the Q-point &mdash; where the stage sits with no signal applied.</p>
+           <p>Move the <b>V<sub>gk</sub></b> slider. The Q-point slides along the (fixed) load line.</p>
+           <p>Read off <code>V<sub>p,Q</sub></code> (the resting plate voltage) and <code>I<sub>p,Q</sub></code> (the resting plate current) from the readout in the upper-right.</p>`,
+    showLoadLine: true, showQ: true, showSignal: false, hideCurves: false,
+    lock: { tube: true, ht: true, rload: true, rcath: true, vgk: false, amp: true, speed: true },
+  },
+  {
+    title: "5. Reading a signal swing",
+    body: `<p>An AC input on the grid wiggles <code>V<sub>gk</sub></code> around the bias. The operating point traces back and forth <b>along the load line</b>, hopping from one V<sub>gk</sub> curve to the next.</p>
+           <p>Project that traveling dot down to the X axis &rarr; that's the <b>plate-voltage swing</b>, the stage's output.</p>
+           <p>Notice the polarity: when the grid goes <i>more positive</i>, plate current rises and the plate drops &mdash; <b>output is inverted</b>.</p>
+           <p>Press <b>Play</b> to animate.</p>`,
+    showLoadLine: true, showQ: true, showSignal: true, hideCurves: false,
+    lock: { tube: true, ht: true, rload: true, rcath: true, vgk: false, amp: false, speed: false },
+    defaults: { amp: 0.5 },
+  },
+  {
+    title: "6. Picking R<sub>L</sub>",
+    body: `<p>Hold the bias steady. Now sweep <b>R<sub>L</sub></b>. The load line pivots about <code>(HT, 0)</code>:</p>
+           <ul>
+             <li><b>Larger R<sub>L</sub></b> &rarr; flatter line &rarr; the same grid swing produces a <i>bigger</i> plate swing (more gain).</li>
+             <li>But the Q-point also slides toward the knee &mdash; less headroom on one side.</li>
+           </ul>
+           <p>Pick R<sub>L</sub> too small and gain collapses. Too big and you starve the Q-point. The art of biasing is putting Q where you have headroom in both directions.</p>`,
+    showLoadLine: true, showQ: true, showSignal: true, hideCurves: false,
+    lock: { tube: true, ht: true, rload: false, rcath: true, vgk: true, amp: false, speed: false },
+    defaults: { amp: 0.5 },
+  },
+  {
+    title: "7. Clipping and headroom",
+    body: `<p>Push <b>amplitude</b> up. The traveling dot eventually runs out of road:</p>
+           <ul>
+             <li>Up against <code>V<sub>gk</sub>&nbsp;=&nbsp;0</code> &mdash; grid current, the curve crowds &mdash; <b>positive-grid clip</b>.</li>
+             <li>Down against the X axis &mdash; tube cuts off &mdash; <b>cutoff clip</b>.</li>
+           </ul>
+           <p>Watch the output waveform on the right flatten when the swing exceeds the available headroom on either side of the Q-point. That asymmetric clipping is the practical reason you spent all that effort placing the Q-point.</p>
+           <p>That's the load line. You now know what it is, how to draw it, how to read off the Q-point, and how to use it to predict swing, gain, and clipping.</p>`,
+    showLoadLine: true, showQ: true, showSignal: true, hideCurves: false,
+    lock: { tube: true, ht: false, rload: false, rcath: true, vgk: false, amp: false, speed: false },
+    defaults: { amp: 2.0 },
+  },
+  {
+    title: "8. Self-bias with a cathode resistor",
+    body: `<p>Up to now you've been setting the grid bias with an external negative voltage. A slicker way: drop a resistor <code>R<sub>k</sub></code> in the cathode lead and let the tube bias <i>itself</i>.</p>
+      <svg class="schematic" viewBox="0 0 200 230" width="180" height="210" aria-hidden="true">
+        <text x="100" y="14" fill="#ffd34d" text-anchor="middle" font-size="11">+HT</text>
+        <line x1="100" y1="18" x2="100" y2="36" stroke="#d8dde5"/>
+        <polyline points="100,36 90,42 110,50 90,58 110,66 90,74 110,82 100,88"
+                  fill="none" stroke="#d8dde5" stroke-width="1.4"/>
+        <text x="116" y="65" fill="#a8ffb8" font-size="11">R&#8323;</text>
+        <line x1="100" y1="88" x2="100" y2="125" stroke="#d8dde5"/>
+        <circle cx="100" cy="138" r="24" fill="none" stroke="#d8dde5"/>
+        <line x1="88" y1="125" x2="112" y2="125" stroke="#d8dde5" stroke-width="1.6"/>
+        <line x1="86" y1="138" x2="114" y2="138" stroke="#d8dde5" stroke-dasharray="2,2"/>
+        <line x1="88" y1="151" x2="112" y2="151" stroke="#d8dde5" stroke-width="1.6"/>
+        <line x1="86" y1="138" x2="62" y2="138" stroke="#d8dde5"/>
+        <text x="42" y="142" fill="#9ad0ff" font-size="11">V&#x1D4F0;</text>
+        <line x1="100" y1="151" x2="100" y2="166" stroke="#d8dde5"/>
+        <polyline points="100,166 90,172 110,180 90,188 110,196 100,202"
+                  fill="none" stroke="#d8dde5" stroke-width="1.4"/>
+        <text x="116" y="186" fill="#ffd34d" font-size="11">R&#x2096;</text>
+        <line x1="100" y1="202" x2="100" y2="212" stroke="#d8dde5"/>
+        <line x1="90" y1="212" x2="110" y2="212" stroke="#d8dde5" stroke-width="1.6"/>
+        <line x1="93" y1="216" x2="107" y2="216" stroke="#d8dde5"/>
+        <line x1="96" y1="220" x2="104" y2="220" stroke="#d8dde5"/>
+      </svg>
+      <p>The plate current flows out the cathode, through R<sub>k</sub>, to ground. That develops <code>V<sub>k</sub> = I<sub>p</sub>&middot;R<sub>k</sub></code> volts across the resistor. The grid is held at <b>0 V DC</b> via a grid-leak resistor (more on that later), so</p>
+      <p style="text-align:center"><code>V<sub>gk</sub> = 0 &minus; V<sub>k</sub> = &minus;I<sub>p</sub>&middot;R<sub>k</sub></code></p>
+      <p>That's a self-consistency: I<sub>p</sub> sets V<sub>k</sub>, V<sub>k</sub> sets V<sub>gk</sub>, V<sub>gk</sub> sets I<sub>p</sub>. The Q-point is wherever all three agree.</p>
+      <p>Two consequences. <b>DC:</b> the load line now uses <code>R<sub>a</sub>+R<sub>k</sub></code> for slope, and the V<sub>gk</sub> slider is locked &mdash; it's a <i>derived</i> readout, not a knob. <b>AC:</b> every time the input tries to push more current through, V<sub>k</sub> rises with it, eating into the V<sub>gk</sub> swing. Local negative feedback. Gain drops by roughly <code>1 / (1 + g<sub>m</sub>R<sub>k</sub>)</code>.</p>
+      <p>Sweep <b>R<sub>k</sub></b> from 0 (back to fixed bias) up. Watch V<sub>gk</sub> and the Q-point self-adjust, and watch the gain readout fall as R<sub>k</sub> grows. Up next: a capacitor across R<sub>k</sub> to keep the DC bias but recover the AC gain.</p>`,
+    showLoadLine: true, showQ: true, showSignal: true, hideCurves: false,
+    lock: { tube: true, ht: false, rload: false, rcath: false, vgk: true, amp: false, speed: false },
+    defaults: { rcath: 1.5, amp: 0.5 },
+  },
+];
+
+// ---------- DOM ----------
+const $ = id => document.getElementById(id);
+const plot   = $("plot");
+const ctx    = plot.getContext("2d");
+const wavesC = $("waves");
+const wctx   = wavesC.getContext("2d");
+
+function bindSlider(id, key, scale = 1) {
+  const el = $(id);
+  el.addEventListener("input", () => {
+    state[key] = parseFloat(el.value) * scale;
+    if (key === "amp" && state.amp > 0 && !state.playing) togglePlay();
+    syncLabels(); redraw();
+  });
+}
+bindSlider("ht",    "ht");
+bindSlider("rload", "rk");
+bindSlider("rcath", "rcath", 1/1000);   // slider in Ω, state.rcath kept in kΩ
+bindSlider("vgk",   "vgk");
+bindSlider("amp",   "amp");
+bindSlider("speed", "speed");
+
+$("playBtn").addEventListener("click", togglePlay);
+$("resetBtn").addEventListener("click", resetDefaults);
+
+document.querySelectorAll('input[name="tube"]').forEach(r => {
+  r.addEventListener("change", () => {
+    if (!r.checked) return;
+    state.tube = r.value;
+    applyTube();
+    redraw();
+  });
+});
+
+$("tab-lesson").addEventListener("click",  () => setMode("lesson"));
+$("tab-sandbox").addEventListener("click", () => setMode("sandbox"));
+$("prevBtn").addEventListener("click", () => gotoLesson(state.lesson - 1));
+$("nextBtn").addEventListener("click", () => gotoLesson(state.lesson + 1));
+
+function setMode(m) {
+  state.mode = m;
+  $("tab-lesson").classList.toggle("active",  m === "lesson");
+  $("tab-sandbox").classList.toggle("active", m === "sandbox");
+  $("lessonCard").style.display = m === "lesson" ? "" : "none";
+  $("lessonNav").style.display  = m === "lesson" ? "" : "none";
+  applyLessonGates();
+  syncLabels(); redraw();
+}
+
+function gotoLesson(i) {
+  if (i < 0 || i >= LESSONS.length) return;
+  state.lesson = i;
+  const L = LESSONS[i];
+  if (L.defaults) {
+    if ("amp"   in L.defaults) { state.amp   = L.defaults.amp;   $("amp").value   = state.amp;   }
+    if ("rcath" in L.defaults) { state.rcath = L.defaults.rcath; $("rcath").value = state.rcath * 1000; }
+  } else {
+    if (!L.showSignal) { state.amp = 0; $("amp").value = 0; if (state.playing) togglePlay(); }
+  }
+  // Stepping out of the self-bias lesson back into a fixed-bias one: zero R_k so
+  // the earlier lessons aren't silently running with cathode bias on.
+  if (!("rcath" in (L.defaults || {})) && L.lock && L.lock.rcath) {
+    state.rcath = 0; $("rcath").value = 0;
+  }
+  applyLessonGates();
+  syncLabels(); redraw();
+}
+
+function applyLessonGates() {
+  const L = LESSONS[state.lesson];
+  $("lessonTitle").innerHTML = L.title;
+  $("lessonBody").innerHTML    = L.body;
+  $("lessonStep").textContent  = `Step ${state.lesson + 1} / ${LESSONS.length}`;
+  $("prevBtn").disabled = state.lesson === 0;
+  $("nextBtn").disabled = state.lesson === LESSONS.length - 1;
+
+  const inLesson = state.mode === "lesson";
+  for (const key of ["tube","ht","rload","rcath","vgk","amp","speed"]) {
+    const ctrl = document.querySelector(`[data-ctrl="${key}"]`);
+    const locked = inLesson && L.lock[key];
+    ctrl.classList.toggle("locked", !!locked);
+  }
+  const signalDisabled = inLesson && !L.showSignal;
+  $("playBtn").disabled = signalDisabled;
+  $("playBtn").title = signalDisabled ? "No signal in this step" : "";
+  if (signalDisabled && state.playing) togglePlay();
+}
+
+function resetDefaults() {
+  state.tube = "12AX7";
+  state.ht = 250; state.rk = 100; state.rcath = 0;
+  state.vgk = -1.5; state.amp = 0; state.speed = 1;
+  const tubeRadio = document.querySelector('input[name="tube"][value="12AX7"]');
+  if (tubeRadio) tubeRadio.checked = true;
+  applyTube();
+  $("ht").value = 250; $("rload").value = 100; $("rcath").value = 0;
+  $("vgk").value = -1.5; $("amp").value = 0; $("speed").value = 1;
+  if (state.playing) togglePlay();
+  syncLabels(); redraw();
+}
+
+function syncLabels() {
+  $("vHt").textContent    = state.ht.toFixed(0);
+  $("vRload").textContent = state.rk.toFixed(0);
+  $("vRcath").textContent = (state.rcath * 1000).toFixed(0);
+  $("vVgk").textContent   = state.vgk.toFixed(2);
+  $("vAmp").textContent   = state.amp.toFixed(2);
+  $("vSpeed").textContent = state.speed.toFixed(1) + "x";
+  // Cutoff threshold helper: the tube conducts only when Vp + μ·Vgk > 0,
+  // so plate current starts at Vp ≈ -μ·Vgk for negative bias.
+  $("vgkHintVal").textContent = (MU * Math.max(0, -state.vgk)).toFixed(0);
+
+  // Color the Vgk slider along a blackbody-ish cold→hot ramp:
+  //   far left (-5 V, deep cutoff)   = deep navy
+  //   middle  (-2.5 V)               = orange
+  //   far right (0 V, max current)   = white-hot (with a yellow tint)
+  $("vgk").style.accentColor = vgkGradientColor(state.vgk);
+}
+
+// Hertzsprung-Russell stellar progression: cool browns/reds to warm whites with a hint of blue.
+// (Capped at "white with a touch of blue" rather than swinging fully blue at the hot end.)
+const VGK_GRADIENT_STOPS = [
+  [0.00, [ 95,  55,  30]],   // brown (the coolest end)
+  [0.18, [225,  55,  30]],   // vivid red (M giant)
+  [0.32, [255, 120,  35]],   // orange (K class, ~4000 K)
+  [0.50, [255, 215,  90]],   // yellow (G class — Sun, ~5800 K)
+  [0.72, [255, 245, 225]],   // warm white (F/A class)
+  [1.00, [225, 238, 255]],   // white with a hint of blue (hot end, capped)
+];
+function vgkGradientRgb(vgk) {
+  const t = clamp((vgk + 5) / 5, 0, 1);
+  for (let i = 0; i < VGK_GRADIENT_STOPS.length - 1; i++) {
+    const [t0, c0] = VGK_GRADIENT_STOPS[i];
+    const [t1, c1] = VGK_GRADIENT_STOPS[i + 1];
+    if (t <= t1) {
+      const f = (t - t0) / (t1 - t0);
+      return [
+        Math.round(c0[0] + (c1[0] - c0[0]) * f),
+        Math.round(c0[1] + (c1[1] - c0[1]) * f),
+        Math.round(c0[2] + (c1[2] - c0[2]) * f),
+      ];
+    }
+  }
+  return VGK_GRADIENT_STOPS[VGK_GRADIENT_STOPS.length - 1][1].slice();
+}
+function vgkGradientColor(vgk) {
+  const [r,g,b] = vgkGradientRgb(vgk);
+  return `rgb(${r},${g},${b})`;
+}
+
+function togglePlay() {
+  state.playing = !state.playing;
+  $("playBtn").textContent = state.playing ? "Pause" : "Play";
+  if (state.playing) {
+    state.t0 = performance.now();
+    requestAnimationFrame(tick);
+  }
+}
+
+function tick(now) {
+  if (!state.playing) return;
+  state.tNow = (now - state.t0) / 1000;
+  redraw();
+  requestAnimationFrame(tick);
+}
+
+// ---------- Drawing ----------
+function fitCanvas(c) {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = c.getBoundingClientRect();
+  c.width  = Math.round(rect.width  * dpr);
+  c.height = Math.round(rect.height * dpr);
+  const cx = c.getContext("2d");
+  cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { w: rect.width, h: rect.height, ctx: cx };
+}
+
+function yMax(ht, rk, rcath) {
+  const rTot = (rk || 0) + (rcath || 0);
+  return Math.max(4, (ht / Math.max(rTot, 0.001)) * 1.15);
+}
+
+function redraw() {
+  syncDerivedVgk();
+  syncLabels();
+  drawPlot();
+  drawWaves();
+  drawReadout();
+}
+
+function drawPlot() {
+  const { w, h, ctx: c } = fitCanvas(plot);
+  c.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--panel");
+  c.fillRect(0, 0, w, h);
+
+  // Axis margins
+  const ml = 56, mr = 22, mt = 22, mb = 44;
+  const pw = w - ml - mr, ph = h - mt - mb;
+
+  // Extend the X axis so the active plate curve is always on screen, even at very cold
+  // biases (deep cutoff) where the curve only conducts above Vp ≈ -μ·Vgk.
+  const muCutoff = MU * Math.max(0, -state.vgk);
+  const xMax = Math.max(state.ht, muCutoff + 70, 100);
+  const yM   = yMax(state.ht, state.rk, state.rcath);
+  const rTot = state.rk + state.rcath;
+  const X = vp => ml + (vp / xMax) * pw;
+  const Y = ip => mt + ph - (ip / yM) * ph;
+
+  // Axes & grid
+  c.strokeStyle = "#2c323d"; c.lineWidth = 1;
+  c.fillStyle = "#8a93a3"; c.font = "11px ui-sans-serif, system-ui, sans-serif";
+  const xStep = xMax <= 200 ? 25 : xMax <= 500 ? 50 : 100;
+  for (let v = 0; v <= xMax + 0.001; v += xStep) {
+    const px = X(v);
+    c.beginPath(); c.moveTo(px, mt); c.lineTo(px, mt + ph); c.stroke();
+    c.fillText(v.toFixed(0), px - 8, mt + ph + 14);
+  }
+  const yStep = yM <= 4 ? 0.5 : yM <= 8 ? 1 : 2;
+  for (let i = 0; i <= yM + 1e-6; i += yStep) {
+    const py = Y(i);
+    c.beginPath(); c.moveTo(ml, py); c.lineTo(ml + pw, py); c.stroke();
+    c.fillText(i.toFixed(yStep < 1 ? 1 : 0), 18, py + 4);
+  }
+  // axis frame
+  c.strokeStyle = "#3a4250"; c.lineWidth = 1.2;
+  c.strokeRect(ml, mt, pw, ph);
+
+  // Axis labels
+  c.fillStyle = "#c1c8d4";
+  c.font = "12px ui-sans-serif, system-ui, sans-serif";
+  c.fillText("Vₚ  (plate voltage, V)", ml + pw / 2 - 60, mt + ph + 32);
+  c.save();
+  c.translate(14, mt + ph / 2 + 50);
+  c.rotate(-Math.PI / 2);
+  c.fillText("Iₚ  (plate current, mA)", 0, 0);
+  c.restore();
+
+  // Plate-curve family
+  const lessonNow = (state.mode === "lesson") ? LESSONS[state.lesson] : null;
+  const hideCurves = lessonNow && lessonNow.hideCurves;
+  const selectedVgk = state.vgk;
+  // Always render a curve for the exact current Vgk. At very cold biases the tube is in cutoff
+  // (Ip = 0 across the visible range), so this curve lies along the X axis — but it still
+  // tints with the bias color so the user gets feedback that the slider is doing something.
+  const curvesToDraw = VGK_FAMILY.slice();
+  if (!VGK_FAMILY.some(v => Math.abs(v - selectedVgk) < 0.05)) {
+    curvesToDraw.push(selectedVgk);
+  }
+  if (!hideCurves) for (const vgk of curvesToDraw) {
+    const isNear = Math.abs(vgk - selectedVgk) < 0.26;
+    const [cr, cg, cb] = vgkGradientRgb(vgk);
+    c.strokeStyle = isNear
+      ? `rgb(${cr},${cg},${cb})`
+      : `rgba(${cr},${cg},${cb},0.55)`;
+    c.lineWidth   = isNear ? 1.8 : 1.0;
+    c.beginPath();
+    let started = false;
+    for (let i = 0; i <= 200; i++) {
+      const vp = (xMax * i) / 200;
+      const ip = ipModel(vp, vgk);
+      if (ip > yM * 1.05) continue;
+      const px = X(vp), py = Y(ip);
+      if (!started) { c.moveTo(px, py); started = true; } else c.lineTo(px, py);
+    }
+    c.stroke();
+    // label at right edge where curve reaches yM or xMax
+    const ipAtMax = ipModel(xMax, vgk);
+    let lx, ly;
+    if (ipAtMax > yM) {
+      // find vp where curve hits yM
+      let lo = 0, hi = xMax;
+      for (let k = 0; k < 28; k++) {
+        const m = 0.5 * (lo + hi);
+        if (ipModel(m, vgk) > yM) hi = m; else lo = m;
+      }
+      lx = X(0.5*(lo+hi)) + 6; ly = Y(yM) + 12;
+    } else {
+      lx = X(xMax) - 38; ly = Y(ipAtMax) - 4;
+    }
+    c.fillStyle = isNear
+      ? `rgb(${cr},${cg},${cb})`
+      : `rgba(${cr},${cg},${cb},0.75)`;
+    c.font = "10px ui-sans-serif, system-ui, sans-serif";
+    c.fillText(`${vgk.toFixed(1)} V`, lx, ly);
+  }
+
+  // Annotation: endpoint dots when relevant
+  const L = (state.mode === "lesson") ? LESSONS[state.lesson] : null;
+  const showLine = state.mode === "sandbox" || L.showLoadLine;
+  const showQ    = state.mode === "sandbox" || L.showQ;
+  const showSig  = state.mode === "sandbox" || L.showSignal;
+
+  if (showLine) {
+    const xEnd = state.ht;
+    const yEnd = state.ht / rTot;     // load line uses total (Ra + Rk) series resistance
+    const x0 = X(0), y0 = Y(yEnd);
+    const x1 = X(xEnd), y1 = Y(0);
+
+    // Phosphor-green scope trace: stacked passes from wide+blurry+dim to narrow+sharp+bright.
+    c.save();
+    c.lineCap = "round";
+    const passes = [
+      { w: 9,   a: 0.10, blur: 14 },
+      { w: 5,   a: 0.22, blur: 8  },
+      { w: 2.4, a: 0.85, blur: 3  },
+      { w: 1.1, a: 1.00, blur: 0  },
+    ];
+    for (const p of passes) {
+      c.shadowBlur  = p.blur;
+      c.shadowColor = "#6fff8a";
+      c.strokeStyle = `rgba(170,255,190,${p.a})`;
+      c.lineWidth   = p.w;
+      c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
+      c.fillStyle = `rgba(170,255,190,${p.a})`;
+      c.beginPath(); c.arc(x0, y0, Math.max(2, p.w * 0.9), 0, Math.PI * 2); c.fill();
+      c.beginPath(); c.arc(x1, y1, Math.max(2, p.w * 0.9), 0, Math.PI * 2); c.fill();
+    }
+    c.shadowBlur = 0;
+    c.restore();
+
+    // labels (no glow, dimmer)
+    c.fillStyle = "#a8ffb8";
+    c.font = "11px ui-sans-serif, system-ui, sans-serif";
+    c.fillText(`(${xEnd.toFixed(0)} V, 0)`, x1 - 64, y1 - 6);
+    c.fillText(`(0, ${yEnd.toFixed(2)} mA)`, x0 + 8, y0 - 6);
+    const rLabel = state.rcath > 0
+      ? `Rₐ = ${state.rk.toFixed(0)} kΩ, Rₖ = ${(state.rcath * 1000).toFixed(0)} Ω`
+      : `Rₗ = ${state.rk.toFixed(0)} kΩ`;
+    c.fillText(rLabel,
+               (x0 + x1) / 2 - 50, (y0 + y1) / 2 - 8);
+  }
+
+  if (showQ) {
+    const q = quiescent();
+    c.fillStyle = "#ffd34d";
+    c.beginPath(); c.arc(X(q.vp), Y(q.ip), 5.5, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = "rgba(255,211,77,0.4)"; c.lineWidth = 1;
+    c.setLineDash([3, 3]);
+    c.beginPath(); c.moveTo(X(q.vp), Y(q.ip)); c.lineTo(X(q.vp), Y(0)); c.stroke();
+    c.beginPath(); c.moveTo(X(q.vp), Y(q.ip)); c.lineTo(X(0),    Y(q.ip)); c.stroke();
+    c.setLineDash([]);
+    c.fillStyle = "#ffd34d";
+    c.font = "11px ui-sans-serif, system-ui, sans-serif";
+    c.fillText("Q", X(q.vp) + 8, Y(q.ip) - 8);
+  }
+
+  if (showSig && state.amp > 0) {
+    c.strokeStyle = "rgba(95,180,255,0.55)"; c.lineWidth = 1.4;
+    c.beginPath();
+    for (let i = 0; i <= 80; i++) {
+      const phase = (i / 80) * 2 * Math.PI;
+      const q = opAt(phase);
+      const px = X(q.vp), py = Y(q.ip);
+      if (i === 0) c.moveTo(px, py); else c.lineTo(px, py);
+    }
+    c.stroke();
+
+    // current swing dot
+    const phase = state.tNow * 2 * Math.PI * state.speed * 0.5;
+    const qNow = opAt(phase);
+    c.fillStyle = "#5fb4ff";
+    c.beginPath(); c.arc(X(qNow.vp), Y(qNow.ip), 4.5, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = "rgba(95,180,255,0.7)"; c.lineWidth = 1; c.setLineDash([2,3]);
+    c.beginPath(); c.moveTo(X(qNow.vp), Y(qNow.ip)); c.lineTo(X(qNow.vp), Y(0)); c.stroke();
+    c.setLineDash([]);
+  }
+}
+
+function drawWaves() {
+  const { w, h, ctx: c } = fitCanvas(wavesC);
+  c.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--panel-2");
+  c.fillRect(0,0,w,h);
+
+  const N = 240;
+  const showSig = state.mode === "sandbox" || LESSONS[state.lesson].showSignal;
+  if (!showSig || state.amp === 0) {
+    c.fillStyle = "#8a93a3"; c.font = "11px ui-sans-serif, system-ui";
+    c.fillText("(input/output waveform appears when signal is applied)", 10, h/2);
+    return;
+  }
+
+  // Sample two cycles. Input trace shows the grid voltage delta from its DC value
+  // (so in self-bias the trace centers on 0 V instead of jumping to the bias point).
+  const cycles = 2;
+  const inputs = new Array(N);
+  const outputs = new Array(N);
+  const qBias = quiescent();
+  for (let i = 0; i < N; i++) {
+    const phase = (i / N) * cycles * 2 * Math.PI;
+    inputs[i]   = state.amp * Math.sin(phase);   // input swing relative to DC
+    const q = opAt(phase);
+    outputs[i]  = q.vp;
+  }
+
+  // Fixed scales (do NOT auto-fit) so amplitudes reflect real volts.
+  // Input band:  ±3 V full-scale (slider max). Smaller `amp` makes a smaller trace.
+  // Output band: ±HT/2 around the resting Q-point. So at fixed HT, a higher-gain
+  //   stage (e.g. larger R_L) produces a visibly taller output trace, capped when
+  //   the swing hits the rails (cutoff or saturation).
+  const padX = 8;
+  const inMid    = 0;                          // input trace now centers on its own DC
+  const inRange  = 3.0;                        // volts at the band edge
+  const outMid   = qBias.vp;
+  const outRange = Math.max(1, state.ht / 2);  // volts at the band edge
+
+  function plotTrace(arr, mid, range, yc, yh, color) {
+    c.strokeStyle = color; c.lineWidth = 1.5;
+    c.beginPath();
+    for (let i = 0; i < N; i++) {
+      const x = padX + (i / (N - 1)) * (w - 2 * padX);
+      const norm = clamp((arr[i] - mid) / range, -1, 1); // clip at band edges
+      const y = yc - norm * yh;
+      if (i === 0) c.moveTo(x,y); else c.lineTo(x,y);
+    }
+    c.stroke();
+  }
+
+  // Faint zero-line (Q-point baseline) for each trace
+  c.strokeStyle = "rgba(255,255,255,0.07)"; c.lineWidth = 1;
+  c.beginPath(); c.moveTo(padX, h*0.28); c.lineTo(w-padX, h*0.28); c.stroke();
+  c.beginPath(); c.moveTo(padX, h*0.72); c.lineTo(w-padX, h*0.72); c.stroke();
+
+  plotTrace(inputs,  inMid,  inRange,  h * 0.28, h * 0.20, "#9ad0ff");
+  plotTrace(outputs, outMid, outRange, h * 0.72, h * 0.20, "#ffd34d");
+
+  c.fillStyle = "#8a93a3"; c.font = "10px ui-sans-serif, system-ui";
+  c.fillText(`input Vg  (±${inRange.toFixed(0)} V full-scale)`,         padX, 11);
+  c.fillText(`output Vp (±${outRange.toFixed(0)} V around Q, inverted)`, padX, h - 4);
+
+  // current-phase marker
+  const phase = state.tNow * 2 * Math.PI * state.speed * 0.5;
+  const pos = ((phase / (2*Math.PI)) % cycles) / cycles;
+  const mx = padX + pos * (w - 2*padX);
+  c.strokeStyle = "rgba(255,255,255,0.25)";
+  c.beginPath(); c.moveTo(mx, 0); c.lineTo(mx, h); c.stroke();
+}
+
+function drawReadout() {
+  const L = state.mode === "lesson" ? LESSONS[state.lesson] : null;
+  const showReadout = state.mode === "sandbox" || (L && L.showQ);
+  $("readout").style.display = showReadout ? "" : "none";
+  if (!showReadout) return;
+  const q = quiescent();
+  const showSig = state.mode === "sandbox" || LESSONS[state.lesson].showSignal;
+  let clipNote = "";
+  if (showSig && state.amp > 0) {
+    let clipPos = false, clipNeg = false;
+    const iMax = state.ht / Math.max(state.rk + state.rcath, 0.001);
+    for (let i = 0; i < 100; i++) {
+      const ph = (i / 100) * 2 * Math.PI;
+      const qq = opAt(ph);
+      if (qq.vgk > 0)               clipPos = true;     // grid drawn positive
+      if (qq.ip  >= iMax - 0.05)    clipPos = true;     // saturation rail
+      if (qq.vp  >= state.ht - 0.5) clipNeg = true;     // cutoff rail
+    }
+    if (clipPos || clipNeg) {
+      clipNote = `<div class="warn">clipping: ${[clipPos?"positive grid / saturation":null, clipNeg?"cutoff":null].filter(Boolean).join(", ")}</div>`;
+    }
+  }
+  const T = {
+    vpq:  "Quiescent plate voltage — the resting DC voltage at the plate with no signal applied. This is where the load line crosses the active bias curve.",
+    ipq:  "Quiescent plate current — the resting DC current through the tube with no signal applied.",
+    vk:   "Cathode voltage — Vk = Ip · Rk. With a cathode resistor in place, this is what lifts the cathode above ground and provides the self-bias.",
+    vgk:  "Grid-to-cathode voltage — the bias the tube actually 'feels': Vgk = Vgrid − Vk. In self-bias mode this is a derived quantity, not a free parameter.",
+    pdis: "Plate dissipation — power burned as heat in the plate, P = Vp · Ip. Must stay below the tube's rated maximum dissipation to avoid damage.",
+  };
+  const cathodeRow = state.rcath > 0
+    ? `<div><span class="k" title="${T.vk}">V<sub>k</sub></span> <span class="v">${(q.ip * state.rcath).toFixed(2)} V</span></div>
+       <div><span class="k" title="${T.vgk}">V<sub>gk</sub></span> <span class="v">${q.vgk.toFixed(2)} V</span></div>`
+    : "";
+  $("readout").innerHTML = `
+    <div><span class="k" title="${T.vpq}">V<sub>p,Q</sub></span> <span class="v">${q.vp.toFixed(1)} V</span></div>
+    <div><span class="k" title="${T.ipq}">I<sub>p,Q</sub></span> <span class="v">${q.ip.toFixed(2)} mA</span></div>
+    ${cathodeRow}
+    <div><span class="k" title="${T.pdis}">P<sub>diss</sub></span> <span class="v">${(q.vp * q.ip).toFixed(0)} mW</span></div>
+    ${clipNote}
+  `;
+}
+
+function clamp(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
+
+// ---------- Init ----------
+function init() {
+  applyTube();
+  setMode("lesson");
+  gotoLesson(1);   // open on chapter 2 so the green load line is on screen immediately
+  syncLabels();
+  redraw();
+  window.addEventListener("resize", redraw);
+}
+init();
+</script>
+
+</body>
+</html>
