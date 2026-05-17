@@ -27,7 +27,7 @@
     font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     font-size: 14px;
   }
-  body { display: flex; flex-direction: column; min-height: 100vh; }
+  body { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
   header {
     padding: 10px 18px; border-bottom: 1px solid var(--line);
     display: flex; align-items: center; gap: 18px;
@@ -45,37 +45,38 @@
 
   main {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 360px;
-    gap: 14px; padding: 14px;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 12px; padding: 12px;
     flex: 1 1 auto;
     min-height: 0;
+    min-width: 0;
   }
   @media (max-width: 1100px) {
-    main { grid-template-columns: 1fr; }
+    main { grid-template-columns: 1fr; grid-template-rows: auto; }
   }
 
-  .left-col {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
+  /* Four-quadrant card scaffold. Each .quad fills its grid cell. */
+  .quad {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 10px;
     min-width: 0;
     min-height: 0;
-    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
   }
-
-  .plotwrap {
-    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
-    padding: 10px; position: relative;
-    min-height: 0; min-width: 0;
-    overflow: hidden;
-    flex: 0 0 auto;
-  }
-  #plot {
+  .quad.scroll { overflow-y: auto; overflow-x: visible; }
+  .quad-nw { grid-row: 1; grid-column: 1; position: relative; overflow: hidden; }
+  .quad-ne { grid-row: 1; grid-column: 2; }
+  .quad-sw { grid-row: 2; grid-column: 1; }
+  .quad-se { grid-row: 2; grid-column: 2; }
+  .quad-nw > canvas {
+    flex: 1 1 auto;
     width: 100%;
-    aspect-ratio: 16 / 11;
-    max-height: calc(100vh - 300px);
+    min-height: 0;
     display: block;
-    margin: 0 auto;
   }
   canvas { display: block; }
   #waves { width: 100%; height: 110px; }
@@ -94,12 +95,7 @@
   .readout .v { color: var(--text); font-variant-numeric: tabular-nums; }
   .readout .warn { color: var(--bad); }
 
-  .sidebar { display: flex; flex-direction: column; gap: 12px; min-width: 0; min-height: 0; overflow: visible; }
-  .card {
-    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
-    padding: 14px;
-  }
-  .card h2 { font-size: 13px; margin: 0 0 10px 0; color: var(--text-dim); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
+  .quad h2 { font-size: 13px; margin: 0 0 10px 0; color: var(--text-dim); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; }
   .lesson h3 { font-size: 15px; margin: 0 0 8px 0; }
   .lesson p { margin: 0 0 10px 0; line-height: 1.55; color: var(--text); }
   .lesson code { background: var(--panel-2); padding: 1px 5px; border-radius: 3px; font-size: 12px; }
@@ -107,12 +103,12 @@
   .lesson .schematic text { font-family: ui-sans-serif, system-ui, sans-serif; }
   .lesson-nav {
     display: flex; justify-content: space-between; align-items: center;
-    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
-    padding: 8px 14px;
+    padding: 0 0 8px 0;
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--line);
     flex: 0 0 auto;
   }
   .lesson-nav .step { color: var(--text-dim); font-size: 12px; }
-  .lesson .nav .step { color: var(--text-dim); font-size: 12px; }
   button {
     background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
     padding: 6px 12px; border-radius: 5px; cursor: pointer; font-size: 13px;
@@ -132,9 +128,8 @@
   .ctrl.locked .val { color: var(--text-dim); }
   .ctrl .hint {
     position: absolute;
-    right: calc(100% + 10px);
-    top: 50%;
-    transform: translateY(-50%);
+    bottom: calc(100% + 4px);
+    right: 0;
     background: var(--panel-2);
     border: 1px solid var(--line);
     border-radius: 5px;
@@ -164,6 +159,7 @@
 
   .waves { width: 100%; height: 110px; display: block; background: var(--panel-2); border-radius: 5px; margin-top: 6px; }
   .fft { width: 100%; height: 110px; display: block; background: var(--panel-2); border-radius: 5px; margin-top: 6px; }
+  .bode { width: 100%; height: 90px; display: block; background: var(--panel-2); border-radius: 5px; margin-top: 6px; }
   .hd-metrics {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -200,26 +196,14 @@
 </header>
 
 <main>
-  <div class="left-col">
-    <div class="plotwrap">
-      <canvas id="plot"></canvas>
-      <div class="readout" id="readout"></div>
-    </div>
-
-    <div class="lesson-nav" id="lessonNav">
-      <button id="prevBtn">&larr; Prev</button>
-      <span class="step" id="lessonStep"></span>
-      <button id="nextBtn" class="primary">Next &rarr;</button>
-    </div>
-
-    <div class="card lesson" id="lessonCard">
-      <h3 id="lessonTitle"></h3>
-      <div id="lessonBody"></div>
-    </div>
+  <!-- NW: plate-curves plot -->
+  <div class="quad quad-nw">
+    <canvas id="plot"></canvas>
+    <div class="readout" id="readout"></div>
   </div>
 
-  <div class="sidebar">
-    <div class="card">
+  <!-- NE: controls -->
+  <div class="quad quad-ne scroll">
       <h2>Controls</h2>
 
       <div class="ctrl" data-ctrl="tube">
@@ -260,7 +244,7 @@
 
       <div class="ctrl" data-ctrl="cc">
         <div class="row"><label>Coupling cap C<sub>c</sub></label><span class="val"><span id="vCc"></span> &micro;F</span></div>
-        <input type="range" id="cc" min="0" max="1" step="0.001" value="0">
+        <input type="range" id="cc" min="0" max="100" step="1" value="0">
       </div>
 
       <div class="ctrl" data-ctrl="rg">
@@ -293,9 +277,24 @@
         <button id="playBtn">Play</button>
         <button id="resetBtn">Reset to defaults</button>
       </div>
+  </div>
 
+  <!-- SW: lesson -->
+  <div class="quad quad-sw scroll lesson" id="lessonCard">
+    <div class="lesson-nav" id="lessonNav">
+      <button id="prevBtn">&larr; Prev</button>
+      <span class="step" id="lessonStep"></span>
+      <button id="nextBtn" class="primary">Next &rarr;</button>
+    </div>
+    <h3 id="lessonTitle"></h3>
+    <div id="lessonBody"></div>
+  </div>
+
+  <!-- SE: scope, FFT, Bode, harmonic-character readouts -->
+  <div class="quad quad-se scroll">
       <canvas id="waves" class="waves"></canvas>
       <canvas id="fft" class="fft"></canvas>
+      <canvas id="bode" class="bode"></canvas>
       <div class="hd-metrics hidden" id="hdMetrics">
         <div class="hd-row"><span class="hd-label" title="Total Harmonic Distortion: RMS of harmonics 2 through 24 divided by the fundamental. The overall 'how dirty is the output' number.">THD</span><span class="hd-value" id="hdTHD">&mdash;</span></div>
         <div class="hd-row"><span class="hd-label" title="Second harmonic — one octave above the fundamental. Consonant; adds warmth, body, and fullness. Single-ended class-A tube stages naturally produce significant H2 because their transfer curve is asymmetric.">H2</span><span class="hd-value" id="hdH2">&mdash;</span></div>
@@ -307,7 +306,6 @@
         <div class="hd-row"><span class="hd-label" title="Effective harmonic order: power-weighted centroid Σ n·Hₙ² / Σ Hₙ², for n=2..24. A single number for 'where the harmonic energy lives'. ≤3 = mellow/warm; 4–5 = mid; >6 = bright/buzzy/fizzy. Tubes typically sit low; symmetric solid-state clipping pushes this high.">Eff ord</span><span class="hd-value" id="hdEff">&mdash;</span></div>
         <div class="hd-row full"><span class="hd-label" title="Even/odd balance, expressed in dB as 20·log₁₀(evenRMS / oddRMS). Positive = even-dominant ('warm', 'tube-like'). Negative = odd-dominant ('aggressive', 'solid-state-like'). Within ±2 dB = balanced.">Balance</span><span class="hd-value" id="hdBal">&mdash;</span></div>
       </div>
-    </div>
   </div>
 </main>
 
@@ -415,16 +413,16 @@ function quiescent() { return solveOp(state.ht, state.rk, state.rcath, gridDCNow
 const CGP_PF = 1.7;   // grid-to-plate capacitance (the one that gets Miller-multiplied)
 const CGK_PF = 1.6;   // grid-to-cathode capacitance (direct, no multiplication)
 
-// AC cathode impedance at the current test frequency. With no bypass cap, |Zk| = Rk.
+// AC cathode impedance at the given frequency. With no bypass cap, |Zk| = Rk.
 // With a bypass cap, |Zk|(f) = Rk / √(1 + (ω·Rk·Ck)²) — a smooth rolloff from Rk down to 0
 // as f or Ck grows. f_c = 1 / (2π·Rk·Ck) is the corner.
-function effectiveRcath() {
+function effectiveRcathAt(freq) {
   if (state.ck <= 0 || state.rcath <= 0) return state.rcath;
-  const omega = 2 * Math.PI * state.freq;
-  // rcath in kΩ, ck in μF: ω·Rk·Ck = ω · (rcath·1000) · (ck·1e-6) = ω · 1e-3 · rcath · ck
+  const omega = 2 * Math.PI * freq;
   const wrc = omega * 1e-3 * state.rcath * state.ck;
   return state.rcath / Math.sqrt(1 + wrc * wrc);
 }
+function effectiveRcath() { return effectiveRcathAt(state.freq); }
 
 // Composite gain magnitude of the input filter chain (coupling cap + grid leak high-pass,
 // then grid stopper + Miller-effect low-pass). Returns a number between 0 and 1.
@@ -803,6 +801,57 @@ const LESSONS = [
     lock: { tube: true, ht: false, rload: false, rcath: false, ck: false, rs: false, cc: false, freq: false, vgk: true, amp: false, speed: false },
     defaults: { rcath: 1.5, ck: 22, rs: 68, cc: 0.022, rg: 1000, amp: 0.5, freq: 1000 },
   },
+  {
+    title: "12. Frequency response: the full picture",
+    body: `<p>The last three lessons each added a single reactive component to the stage:</p>
+           <ul style="margin-top:-4px">
+             <li><b>Lesson 9:</b> the cathode bypass cap <code>C<sub>k</sub></code> shelves AC gain up above <code>f<sub>k</sub> = 1/(2&pi;R<sub>k</sub>C<sub>k</sub>)</code> &mdash; degenerated below, full gain above.</li>
+             <li><b>Lesson 10:</b> the grid stopper <code>R<sub>s</sub></code>, in series with the Miller-amplified input capacitance, rolls off the top end above <code>f<sub>hi</sub> = 1/(2&pi;R<sub>s</sub>C<sub>in</sub>)</code>.</li>
+             <li><b>Lesson 11:</b> the coupling cap and grid leak <code>C<sub>c</sub>/R<sub>g</sub></code> form a high-pass at <code>f<sub>lo</sub> = 1/(2&pi;R<sub>g</sub>C<sub>c</sub>)</code> that cuts the bottom end.</li>
+           </ul>
+           <p>Together those three corners define the stage's <b>frequency response</b>. The new Bode plot below the FFT shows <code>|G(f)|</code> in dB across the audio range, normalized to the peak (mid-band) gain. The blue vertical line tracks the <b>Test frequency</b> slider.</p>
+           <p>Things to play with:</p>
+           <ul style="margin-top:-4px">
+             <li>Sweep <b>C<sub>k</sub></b> from 0 up. Watch the low-frequency shelf rise from "fully degenerated" to "fully bypassed." With C<sub>k</sub> = 0 the curve is flat at the degenerated level; with C<sub>k</sub> = 22 &micro;F you get a step up at ~5 Hz.</li>
+             <li>Shrink <b>C<sub>c</sub></b> toward 0.001 &micro;F. The low-frequency high-pass corner climbs into the audible bass range and the curve falls off on the left.</li>
+             <li>Push <b>R<sub>s</sub></b> up to 500&nbsp;k&Omega;. The high-frequency corner drops; the curve starts falling off the top end in the kHz range.</li>
+             <li>Move the <b>Test frequency</b> slider. The blue marker tracks across the curve, and the scope/FFT update to reflect the gain you're reading off the Bode plot at that frequency.</li>
+           </ul>
+           <p>The Bode plot is a <i>small-signal</i> picture: it uses the tube's instantaneous slope (g<sub>m</sub>, r<sub>p</sub>) at the Q-point and the linear cascade of the three filters. The nonlinear distortion (still visible in the FFT and harmonic-metrics panel) doesn't show up here &mdash; that's a different lens on the same circuit.</p>
+           <p>A guitar amp is just a stack of these single-stage responses, one per gain stage, multiplied together. The peaks and dips in the overall sound are sums and differences of the corners you're moving here.</p>`,
+    showLoadLine: true, showQ: true, showSignal: true, hideCurves: false,
+    lock: { tube: true, ht: false, rload: false, rcath: false, ck: false, rs: false, cc: false, freq: false, vgk: true, amp: false, speed: false },
+    defaults: { rcath: 1.5, ck: 22, rs: 68, cc: 0.022, rg: 1000, amp: 0.5, freq: 1000 },
+  },
+  {
+    title: "13. Reading the harmonic-character panel",
+    body: `<p>The numbers in the small panel under the FFT are not just THD &mdash; they describe <i>what kind</i> of distortion the stage is producing. Each tells you something about how the output would <i>sound</i>, not just how dirty it is. Walk through them with the simulator running.</p>
+           <p><b>H2 (2nd harmonic, % of fundamental).</b> One octave above the fundamental. Musically consonant &mdash; sounds like adding weight or body. Comes from <b>asymmetric</b> nonlinearity. Single-ended class-A stages have it in spades because the tube's transfer curve isn't symmetric around the Q-point. Push the bias toward the curve's knee (V<sub>gk</sub> closer to 0) and you'll see H2 climb. Move it deep into cutoff and H2 stays low until you hit the cutoff rail.</p>
+           <p><b>H3 (3rd harmonic, %).</b> A musical fifth above the fundamental (and an octave). Sharper and more present than H2. Comes from <b>symmetric</b> compression &mdash; the transfer curve flattening equally at both ends. Symmetric clipping (drive amp until both rails get hit equally) produces lots of H3 with very little H2.</p>
+           <p><b>Even (%).</b> RMS of H2 + H4 + H6 + &hellip; All consonant intervals (octaves). High Even = warm / "tube" coloration.</p>
+           <p><b>Odd (%).</b> RMS of H3 + H5 + H7 + &hellip; Dissonant intervals (fifths, sevenths). Mild amounts add bite and presence; large amounts get harsh.</p>
+           <p><b>Hi-ord (%).</b> Just the H7 and above bin. The <i>fizzy, buzzy</i> part of the spectrum. Tube circuits tend to keep this low; transistor circuits crammed past clipping produce a lot of it. If Hi-ord is climbing, the stage is doing something the listener will perceive as harsh or "ratty."</p>
+           <p><b>Asym (%).</b> The direct geometric measure of asymmetry between the positive and negative peak excursions of the output. A symmetric waveform reads ~0. A single-ended class-A waveform with strong H2 reads in the tens of percent. Asym tracks H2 closely &mdash; they're two views of the same phenomenon.</p>
+           <p><b>Eff ord.</b> Power-weighted centroid of harmonic-number for n ≥ 2. Tells you where the harmonic energy <i>lives</i>:</p>
+           <ul style="margin-top:-4px">
+             <li>≤ 3: nearly all energy in H2 and H3. Warm, musical distortion.</li>
+             <li>3–5: a balanced mix of low and mid harmonics.</li>
+             <li>≥ 5: energy is spreading up into H7+ territory. Aggressive, edgy &mdash; or with hard clipping, harsh.</li>
+           </ul>
+           <p><b>Balance (dB).</b> 20·log<sub>10</sub>(EvenRMS / OddRMS). Positive numbers mean the stage is even-dominant ("tube-like"). Negative means odd-dominant ("solid-state-like"). Within &plusmn;2 dB the stage is "balanced." This is the single number that captures the perceptual difference between "rich and warm" and "edgy and aggressive."</p>
+           <p>Some sweeps to try:</p>
+           <ul style="margin-top:-4px">
+             <li>Tiny <code>amp</code> (0.05 V<sub>pk</sub>): nearly clean. THD &lt; 1 %, mostly H2. Bias-induced 2nd-harmonic is the dominant nonlinearity.</li>
+             <li>Crank <code>amp</code> until the swing hits one rail: Asym jumps up, H2 dominates, Balance pushes positive.</li>
+             <li>Crank past <i>both</i> rails (symmetric clip): H3 + H5 + H7 light up the FFT; Eff-ord rises, Balance goes negative.</li>
+             <li>In lesson 8 set <code>R<sub>k</sub></code> high (say 5 k&Omega;) with no bypass cap. Local feedback flattens distortion: every number falls. Now bypass it (lesson 9): the metrics all rise again. You can <i>watch</i> the feedback-vs-character trade-off in real time.</li>
+             <li>Switch tube to 12AU7 (low μ) and re-bias to a similar Q-point. Curve is more linear &mdash; harmonics fall, Eff-ord drops. That's why low-μ triodes show up in places where linearity matters more than gain.</li>
+           </ul>
+           <p>None of these numbers tell you "this is good" or "this is bad" &mdash; they describe character. A clean hi-fi amp wants all of them as low as possible. A guitar amp at the edge of breakup wants H2 dominant, a modest H3, and Hi-ord essentially zero. Picking the right operating point and component values is the whole job of amp voicing.</p>`,
+    showLoadLine: true, showQ: true, showSignal: true, hideCurves: false,
+    lock: { tube: true, ht: false, rload: false, rcath: false, ck: false, rs: false, cc: false, freq: false, vgk: false, amp: false, speed: false },
+    defaults: { rcath: 1.5, ck: 22, rs: 68, cc: 0.022, rg: 1000, amp: 0.5, freq: 1000 },
+  },
 ];
 
 // ---------- DOM ----------
@@ -813,6 +862,8 @@ const wavesC = $("waves");
 const wctx   = wavesC.getContext("2d");
 const fftC   = $("fft");
 const fctx   = fftC.getContext("2d");
+const bodeC  = $("bode");
+const bctx   = bodeC.getContext("2d");
 
 function bindSlider(id, key, scale = 1) {
   const el = $(id);
@@ -826,7 +877,6 @@ bindSlider("ht",    "ht");
 bindSlider("rload", "rk");
 bindSlider("rcath", "rcath", 1/1000);   // slider in Ω, state.rcath kept in kΩ
 bindSlider("rs",    "rs");
-bindSlider("cc",    "cc");
 bindSlider("rg",    "rg");
 bindSlider("vgk",   "vgk");
 bindSlider("amp",   "amp");
@@ -848,6 +898,25 @@ function sliderFromCk(ck) {
 $("ck").addEventListener("input", () => {
   const s = parseFloat($("ck").value);
   state.ck = ckFromSlider(s);
+  syncLabels(); redraw();
+});
+
+// Coupling cap slider is logarithmic: slider 0 = off (Cc = 0, DC coupled). Slider 1..100
+// maps to 0.0001 μF (100 pF) .. 1 μF via Cc = 10^(-4.0404 + 0.04040·s). Covers four
+// full decades of typical guitar/hi-fi coupling-cap values: 100 pF, 1 nF, 10 nF, 100 nF, 1 μF
+// land at evenly-spaced slider positions.
+const CC_LOG_A = -4.04040, CC_LOG_B = 0.04040;
+function ccFromSlider(s) {
+  if (s <= 0) return 0;
+  return Math.pow(10, CC_LOG_A + CC_LOG_B * s);
+}
+function sliderFromCc(cc) {
+  if (cc <= 0) return 0;
+  return (Math.log10(cc) - CC_LOG_A) / CC_LOG_B;
+}
+$("cc").addEventListener("input", () => {
+  const s = parseFloat($("cc").value);
+  state.cc = ccFromSlider(s);
   syncLabels(); redraw();
 });
 
@@ -890,7 +959,6 @@ function setMode(m) {
   $("tab-lesson").classList.toggle("active",  m === "lesson");
   $("tab-sandbox").classList.toggle("active", m === "sandbox");
   $("lessonCard").style.display = m === "lesson" ? "" : "none";
-  $("lessonNav").style.display  = m === "lesson" ? "" : "none";
   applyLessonGates();
   syncLabels(); redraw();
 }
@@ -904,7 +972,7 @@ function gotoLesson(i) {
     if ("rcath" in L.defaults) { state.rcath = L.defaults.rcath; $("rcath").value = state.rcath * 1000; }
     if ("ck"    in L.defaults) { state.ck    = L.defaults.ck;    $("ck").value    = sliderFromCk(state.ck); }
     if ("rs"    in L.defaults) { state.rs    = L.defaults.rs;    $("rs").value    = state.rs; }
-    if ("cc"    in L.defaults) { state.cc    = L.defaults.cc;    $("cc").value    = state.cc; }
+    if ("cc"    in L.defaults) { state.cc    = L.defaults.cc;    $("cc").value    = sliderFromCc(state.cc); }
     if ("rg"    in L.defaults) { state.rg    = L.defaults.rg;    $("rg").value    = state.rg; }
     if ("freq"  in L.defaults) { state.freq  = L.defaults.freq;  setFreqSlider(state.freq); }
   } else {
@@ -976,7 +1044,10 @@ function syncLabels() {
                           : state.ck < 10  ? state.ck.toFixed(1)
                           :                  state.ck.toFixed(0);
   $("vRs").textContent    = state.rs.toFixed(0);
-  $("vCc").textContent    = state.cc < 0.01 ? state.cc.toFixed(3) : state.cc.toFixed(2);
+  $("vCc").textContent    = state.cc === 0    ? "0"
+                          : state.cc < 0.001  ? state.cc.toFixed(4)
+                          : state.cc < 0.01   ? state.cc.toFixed(3)
+                          :                     state.cc.toFixed(3);
   $("vRg").textContent    = state.rg.toFixed(0);
   $("vFreq").textContent  = formatFreq(state.freq);
   $("vVgk").textContent   = state.vgk.toFixed(2);
@@ -1062,7 +1133,123 @@ function redraw() {
   drawPlot();
   drawWaves();
   drawFft();
+  drawBode();
   drawReadout();
+}
+
+// Small-signal triode parameters at the current Q-point, by numerical perturbation of
+// ipModel. Used to give the Bode plot a continuous analytical gain curve without having
+// to run the nonlinear solver at hundreds of frequencies.
+function smallSignalParams() {
+  const q = quiescent();
+  const eps = 1e-3;
+  const gm = (ipModel(q.vp, q.vgk + eps) - ipModel(q.vp, q.vgk - eps)) / (2 * eps); // mA/V
+  const gp = (ipModel(q.vp + eps, q.vgk) - ipModel(q.vp - eps, q.vgk)) / (2 * eps); // mA/V
+  const rp = gp > 1e-9 ? 1 / gp : 1e9;          // kΩ (since gm is mA/V and we want V/mA)
+  return { gm, rp, mu: gm * rp };
+}
+
+// |G(f)| of the whole stage: input filter × cathode-degeneration-shelf × DC plate-loading.
+// Returns gain magnitude in volts-out-per-volt-in, *not* dB.
+function stageGain(freq, ss) {
+  const ssNow = ss || smallSignalParams();
+  const rkAc  = effectiveRcathAt(freq);
+  const Ra    = state.rk;
+  const denom = Ra + ssNow.rp + (ssNow.mu + 1) * rkAc;
+  const dcStage = denom > 1e-9 ? (ssNow.mu * Ra) / denom : 0;
+  return dcStage * inputFilterGain(freq);
+}
+
+function drawBode() {
+  const { w, h, ctx: c } = fitCanvas(bodeC);
+  c.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--panel-2");
+  c.fillRect(0, 0, w, h);
+
+  const padL = 30, padR = 8, padT = 14, padB = 14;
+  const pw = w - padL - padR, ph = h - padT - padB;
+
+  // Frequency axis: log scale, 10 Hz to 100 kHz (matches the freq slider's range).
+  const fMin = 10, fMax = 1e5;
+  const logFmin = Math.log10(fMin), logFmax = Math.log10(fMax);
+  const xOf = f => padL + ((Math.log10(f) - logFmin) / (logFmax - logFmin)) * pw;
+
+  // Sample the gain curve.
+  const N = 240;
+  const mags = new Float64Array(N);
+  const ss = smallSignalParams();
+  let gMax = 0;
+  for (let i = 0; i < N; i++) {
+    const lf = logFmin + (i / (N - 1)) * (logFmax - logFmin);
+    mags[i] = stageGain(Math.pow(10, lf), ss);
+    if (mags[i] > gMax) gMax = mags[i];
+  }
+  if (gMax < 1e-9) {
+    c.fillStyle = "#8a93a3"; c.font = "10px ui-sans-serif, system-ui";
+    c.fillText("(small-signal gain ≈ 0 — adjust bias / load)", 10, h / 2);
+    return;
+  }
+
+  // Y axis: dB relative to peak. Auto-scale to the actual trace so a near-flat response
+  // doesn't get squashed into the top inch of a fixed -40..0 dB window.
+  let dbDataMin = 0;
+  for (let i = 0; i < N; i++) {
+    const db = 20 * Math.log10(Math.max(mags[i] / gMax, 1e-9));
+    if (db < dbDataMin) dbDataMin = db;
+  }
+  const dbMax = 3;
+  // Clamp the rendered range to [6 dB, 60 dB] so the trace fills the window without
+  // either disappearing (super-flat response) or zooming past noise-floor irrelevance.
+  let dbMin = Math.max(-60, Math.min(-6, dbDataMin - 3));
+  const yOf = db => padT + ((dbMax - db) / (dbMax - dbMin)) * ph;
+
+  // Adaptive grid spacing in dB based on the visible range.
+  const range = dbMax - dbMin;
+  const gridStep = range > 40 ? 10 : range > 20 ? 5 : range > 10 ? 2 : 1;
+
+  // Grid: horizontal dB lines and decade-marked vertical lines.
+  c.strokeStyle = "#2c323d"; c.lineWidth = 1;
+  c.fillStyle = "#8a93a3"; c.font = "9px ui-sans-serif, system-ui";
+  const firstGrid = Math.floor(dbMax / gridStep) * gridStep;
+  for (let db = firstGrid; db >= dbMin; db -= gridStep) {
+    const y = yOf(db);
+    c.beginPath(); c.moveTo(padL, y); c.lineTo(padL + pw, y); c.stroke();
+    c.fillText(`${db}`, 6, y + 3);
+  }
+  for (const f of [10, 100, 1000, 10000, 100000]) {
+    const x = xOf(f);
+    c.beginPath(); c.moveTo(x, padT); c.lineTo(x, padT + ph); c.stroke();
+    const lbl = f >= 1000 ? `${f / 1000}k` : `${f}`;
+    c.fillText(lbl, x - 6, h - 3);
+  }
+
+  // Reference 0 dB line (at peak gain).
+  c.strokeStyle = "rgba(255,211,77,0.35)"; c.lineWidth = 1;
+  c.setLineDash([3, 3]);
+  c.beginPath(); c.moveTo(padL, yOf(0)); c.lineTo(padL + pw, yOf(0)); c.stroke();
+  c.setLineDash([]);
+
+  // Gain curve.
+  c.strokeStyle = "#6fff8a"; c.lineWidth = 1.6;
+  c.beginPath();
+  let started = false;
+  for (let i = 0; i < N; i++) {
+    const db = 20 * Math.log10(mags[i] / gMax);
+    const lf = logFmin + (i / (N - 1)) * (logFmax - logFmin);
+    const x = xOf(Math.pow(10, lf));
+    const y = yOf(Math.max(dbMin, Math.min(dbMax, db)));
+    if (!started) { c.moveTo(x, y); started = true; }
+    else { c.lineTo(x, y); }
+  }
+  c.stroke();
+
+  // Vertical marker at the current test frequency.
+  const xCur = xOf(state.freq);
+  c.strokeStyle = "rgba(95,180,255,0.75)"; c.lineWidth = 1;
+  c.beginPath(); c.moveTo(xCur, padT); c.lineTo(xCur, padT + ph); c.stroke();
+
+  // Header line.
+  c.fillStyle = "#c1c8d4"; c.font = "11px ui-sans-serif, system-ui";
+  c.fillText(`small-signal gain  |Av|·peak = ${gMax.toFixed(1)} V/V`, padL, 11);
 }
 
 // Iterative radix-2 Cooley-Tukey FFT, in-place on real/imag arrays of length n (power of 2).
