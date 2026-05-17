@@ -78,7 +78,7 @@
     margin: 0 auto;
   }
   canvas { display: block; }
-  #waves { width: 100%; height: 80px; }
+  #waves { width: 100%; height: 110px; }
   .readout {
     position: absolute; top: 22px; right: 22px;
     background: rgba(20,23,28,0.85); border: 1px solid var(--line);
@@ -117,9 +117,10 @@
     background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
     padding: 6px 12px; border-radius: 5px; cursor: pointer; font-size: 13px;
   }
-  button:hover:not(:disabled) { background: #303641; }
+  button:hover:not(:disabled) { background: #3a4250; border-color: #4a5260; }
   button:disabled { opacity: 0.4; cursor: default; }
   button.primary { background: var(--accent); color: #1a1a1a; border-color: var(--accent); font-weight: 600; }
+  button.primary:hover:not(:disabled) { background: #ffe070; border-color: #ffe070; }
 
   .ctrl { margin-bottom: 12px; position: relative; }
   .ctrl:last-child { margin-bottom: 0; }
@@ -161,7 +162,28 @@
   .tube-info { margin-top: 6px; font-size: 11px; color: var(--text-dim); }
   .tube-info .v { color: var(--text); font-variant-numeric: tabular-nums; margin-left: 2px; }
 
-  .waves { width: 100%; height: 80px; display: block; background: var(--panel-2); border-radius: 5px; margin-top: 6px; }
+  .waves { width: 100%; height: 110px; display: block; background: var(--panel-2); border-radius: 5px; margin-top: 6px; }
+  .fft { width: 100%; height: 110px; display: block; background: var(--panel-2); border-radius: 5px; margin-top: 6px; }
+  .hd-metrics {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3px 18px;
+    margin-top: 6px;
+    padding: 8px 12px;
+    background: var(--panel-2);
+    border-radius: 5px;
+    font-size: 11px;
+  }
+  .hd-metrics.hidden { display: none; }
+  .hd-row { display: flex; justify-content: space-between; align-items: baseline; }
+  .hd-row.full { grid-column: 1 / -1; }
+  .hd-label {
+    color: var(--text-dim);
+    cursor: help;
+    text-decoration: underline dotted rgba(138,147,163,0.45);
+    text-underline-offset: 2px;
+  }
+  .hd-value { color: var(--text); font-variant-numeric: tabular-nums; }
 
   footer { color: var(--text-dim); font-size: 11px; padding: 6px 14px 10px; flex: 0 0 auto; border-top: 1px solid var(--line); }
 </style>
@@ -226,6 +248,31 @@
         <input type="range" id="rcath" min="0" max="5000" step="50" value="0">
       </div>
 
+      <div class="ctrl" data-ctrl="ck">
+        <div class="row"><label>Cathode bypass cap C<sub>k</sub></label><span class="val"><span id="vCk"></span> &micro;F</span></div>
+        <input type="range" id="ck" min="0" max="100" step="1" value="0">
+      </div>
+
+      <div class="ctrl" data-ctrl="rs">
+        <div class="row"><label>Grid stopper R<sub>s</sub></label><span class="val"><span id="vRs"></span> k&Omega;</span></div>
+        <input type="range" id="rs" min="0" max="1000" step="5" value="0">
+      </div>
+
+      <div class="ctrl" data-ctrl="cc">
+        <div class="row"><label>Coupling cap C<sub>c</sub></label><span class="val"><span id="vCc"></span> &micro;F</span></div>
+        <input type="range" id="cc" min="0" max="1" step="0.001" value="0">
+      </div>
+
+      <div class="ctrl" data-ctrl="rg">
+        <div class="row"><label>Grid leak R<sub>g</sub></label><span class="val"><span id="vRg"></span> k&Omega;</span></div>
+        <input type="range" id="rg" min="100" max="10000" step="50" value="1000">
+      </div>
+
+      <div class="ctrl" data-ctrl="freq">
+        <div class="row"><label>Test frequency</label><span class="val"><span id="vFreq"></span></span></div>
+        <input type="range" id="freq" min="0" max="40" step="0.2" value="20">
+      </div>
+
       <div class="ctrl" data-ctrl="vgk">
         <div class="row"><label>Grid bias V<sub>gk</sub></label><span class="val"><span id="vVgk"></span> V</span></div>
         <input type="range" id="vgk" min="-5" max="0" step="0.05" value="-1.5">
@@ -248,36 +295,84 @@
       </div>
 
       <canvas id="waves" class="waves"></canvas>
+      <canvas id="fft" class="fft"></canvas>
+      <div class="hd-metrics hidden" id="hdMetrics">
+        <div class="hd-row"><span class="hd-label" title="Total Harmonic Distortion: RMS of harmonics 2 through 24 divided by the fundamental. The overall 'how dirty is the output' number.">THD</span><span class="hd-value" id="hdTHD">&mdash;</span></div>
+        <div class="hd-row"><span class="hd-label" title="Second harmonic — one octave above the fundamental. Consonant; adds warmth, body, and fullness. Single-ended class-A tube stages naturally produce significant H2 because their transfer curve is asymmetric.">H2</span><span class="hd-value" id="hdH2">&mdash;</span></div>
+        <div class="hd-row"><span class="hd-label" title="Even-order distortion (H2 + H4 + H6 + ...) as RMS / fundamental. Even harmonics fall on octaves of the fundamental, so they sound consonant — typically warm and smooth.">Even</span><span class="hd-value" id="hdEven">&mdash;</span></div>
+        <div class="hd-row"><span class="hd-label" title="Third harmonic — one octave plus a fifth above the fundamental. Adds presence, edge, and 'cut'. Push-pull and any symmetric clipping circuit emphasizes odd harmonics.">H3</span><span class="hd-value" id="hdH3">&mdash;</span></div>
+        <div class="hd-row"><span class="hd-label" title="Odd-order distortion (H3 + H5 + H7 + ...) as RMS / fundamental. Odd harmonics fall on dissonant intervals — they sound aggressive and edgy. Modest amounts add presence; lots = harsh.">Odd</span><span class="hd-value" id="hdOdd">&mdash;</span></div>
+        <div class="hd-row"><span class="hd-label" title="High-order content (H7 and above) as RMS / fundamental. The 'fizzy / buzzy / ratty' part of the spectrum. Tubes usually produce very little; symmetric solid-state clipping produces lots.">Hi-ord</span><span class="hd-value" id="hdHash">&mdash;</span></div>
+        <div class="hd-row"><span class="hd-label" title="Output asymmetry: (|peak+| − |peak−|) / (|peak+| + |peak−|). Positive = the upward swing is larger than the downward (top-heavy); negative = bottom-heavy; ≈0 = symmetric. Strong asymmetry → strong H2 (single-ended class-A behavior). Symmetric outputs come from push-pull stages or hard symmetric clipping and are dominated by odd-order harmonics.">Asym</span><span class="hd-value" id="hdAsym">&mdash;</span></div>
+        <div class="hd-row"><span class="hd-label" title="Effective harmonic order: power-weighted centroid Σ n·Hₙ² / Σ Hₙ², for n=2..24. A single number for 'where the harmonic energy lives'. ≤3 = mellow/warm; 4–5 = mid; >6 = bright/buzzy/fizzy. Tubes typically sit low; symmetric solid-state clipping pushes this high.">Eff ord</span><span class="hd-value" id="hdEff">&mdash;</span></div>
+        <div class="hd-row full"><span class="hd-label" title="Even/odd balance, expressed in dB as 20·log₁₀(evenRMS / oddRMS). Positive = even-dominant ('warm', 'tube-like'). Negative = odd-dominant ('aggressive', 'solid-state-like'). Within ±2 dB = balanced.">Balance</span><span class="hd-value" id="hdBal">&mdash;</span></div>
+      </div>
     </div>
   </div>
 </main>
 
 <footer>
-  Triode model: I<sub>p</sub> = K (V<sub>p</sub> + &mu;&middot;V<sub>gk</sub>)<sup>3/2</sup> for V<sub>p</sub> + &mu;&middot;V<sub>gk</sub> &gt; 0.
-  Defaults tuned for a 12AX7-ish triode (&mu;=100). Educational simplification &mdash; not a circuit-accurate SPICE model.
+  Triode model: Norman Koren's SPICE triode model (default, advanced), or simple Child-Langmuir 3/2-power law
+  &mdash; <code>I<sub>p</sub> = K (V<sub>p</sub> + &mu;&middot;V<sub>gk</sub>)<sup>3/2</sup></code> &mdash; as a fallback (toggle <code>USE_ADVANCED_TUBE_MODEL</code> in the script).
+  Educational &mdash; no inter-electrode capacitance, no grid current, no frequency dependence.
 </footer>
 
 <script>
 "use strict";
 
 // ---------- Triode model ----------
-// 3/2-power-law parameters per tube type. K values are tuned to land a typical datasheet
-// operating point (Vp ~250 V) at the rough datasheet plate current — this is an educational
-// simplification, not a SPICE-grade model. μ values are from the canonical datasheets.
+// Each tube has parameters for two models:
+//   - simple: Child-Langmuir 3/2-power law,  Ip = K · (Vp + μ·Vgk)^1.5
+//   - koren:  Norman Koren's SPICE triode model (a much closer fit to real datasheets):
+//             E1 = (Vp/Kp) · ln(1 + exp(Kp · (1/μ + Vgk/√(Kvb + Vp²))))
+//             Ip = 2 · E1^Ex / Kg1     (when E1 > 0; else 0)
+// Toggle USE_ADVANCED_TUBE_MODEL to switch between them at runtime (no UI).
+const USE_ADVANCED_TUBE_MODEL = true;
+
 const TUBES = {
-  "12AX7": { mu: 100, k: 0.00894 },  // high-μ, low-current preamp triode
-  "12AT7": { mu:  60, k: 0.00540 },  // medium-μ RF/audio triode
-  "12AU7": { mu:  17, k: 0.00800 },  // low-μ general-purpose triode
-  "12AY7": { mu:  44, k: 0.00500 },  // medium-μ, low-noise preamp triode
+  "12AX7": {
+    mu: 100, k: 0.00894,
+    koren: { ex: 1.40, kg1: 1060, kp: 600, kvb: 300 },
+  },
+  "12AT7": {
+    mu:  60, k: 0.00540,
+    koren: { ex: 1.35, kg1:  460, kp: 300, kvb: 300 },
+  },
+  "12AU7": {
+    mu:  17, k: 0.00800,
+    koren: { ex: 1.40, kg1: 1180, kp:  50, kvb: 300 },
+  },
+  "12AY7": {
+    mu:  44, k: 0.00500,
+    koren: { ex: 1.35, kg1: 1175, kp: 270, kvb: 300 },
+  },
 };
 let MU = TUBES["12AX7"].mu;
 let K  = TUBES["12AX7"].k;
 const VGK_FAMILY = [0, -0.5, -1, -1.5, -2, -2.5, -3, -3.5, -4];
 
 function ipModel(vp, vgk) {
+  if (USE_ADVANCED_TUBE_MODEL) return korenIp(vp, vgk);
+  // Simple Child-Langmuir 3/2-power law fallback.
   const eff = vp + MU * vgk;
   if (eff <= 0) return 0;
   return K * Math.pow(eff, 1.5); // mA
+}
+
+// Norman Koren's improved triode model (1996). Returns Ip in mA so it slots into the rest
+// of the code without unit changes.
+function korenIp(vp, vgk) {
+  if (vp <= 0) return 0;
+  const t   = TUBES[state.tube] || TUBES["12AX7"];
+  const kor = t.koren;
+  const denom = Math.sqrt(kor.kvb + vp * vp);
+  const x = kor.kp * (1 / t.mu + vgk / denom);
+  // log(1 + exp(x)) computed in a numerically stable way: for large x, ln(1+e^x) ≈ x.
+  const logTerm = x > 50 ? x : Math.log1p(Math.exp(x));
+  const e1 = (vp / kor.kp) * logTerm;
+  if (e1 <= 0) return 0;
+  // Koren's formula gives Ip in amps; multiply by 1000 to land in mA.
+  return 1000 * 2 * Math.pow(e1, kor.ex) / kor.kg1;
 }
 
 // General operating-point solver. Bisects on plate current Ip (mA) such that
@@ -310,9 +405,77 @@ function solveQ(ht, ra, vgk) { return solveOp(ht, ra, 0, vgk); }
 // DC grid voltage: in fixed-bias mode the slider sets Vg directly (Vk = 0 so Vgk = Vg).
 // In self-bias mode the grid is tied to ground via a leak resistor, so Vg_dc = 0.
 function gridDCNow() { return state.rcath > 0 ? 0 : state.vgk; }
-function gridAt(phase) { return gridDCNow() + state.amp * Math.sin(phase); }
-function opAt(phase) { return solveOp(state.ht, state.rk, state.rcath, gridAt(phase)); }
+function effectiveAmp() { return state.amp * inputFilterGain(state.freq); }
+function gridAt(phase) { return gridDCNow() + effectiveAmp() * Math.sin(phase); }
 function quiescent() { return solveOp(state.ht, state.rk, state.rcath, gridDCNow()); }
+
+// Approximate triode inter-electrode capacitances (picofarads). Used for the Miller-effect
+// calculation on the grid-stopper rolloff. Real values vary by tube type; we use one
+// generic pair as an educational simplification.
+const CGP_PF = 1.7;   // grid-to-plate capacitance (the one that gets Miller-multiplied)
+const CGK_PF = 1.6;   // grid-to-cathode capacitance (direct, no multiplication)
+
+// AC cathode impedance at the current test frequency. With no bypass cap, |Zk| = Rk.
+// With a bypass cap, |Zk|(f) = Rk / √(1 + (ω·Rk·Ck)²) — a smooth rolloff from Rk down to 0
+// as f or Ck grows. f_c = 1 / (2π·Rk·Ck) is the corner.
+function effectiveRcath() {
+  if (state.ck <= 0 || state.rcath <= 0) return state.rcath;
+  const omega = 2 * Math.PI * state.freq;
+  // rcath in kΩ, ck in μF: ω·Rk·Ck = ω · (rcath·1000) · (ck·1e-6) = ω · 1e-3 · rcath · ck
+  const wrc = omega * 1e-3 * state.rcath * state.ck;
+  return state.rcath / Math.sqrt(1 + wrc * wrc);
+}
+
+// Composite gain magnitude of the input filter chain (coupling cap + grid leak high-pass,
+// then grid stopper + Miller-effect low-pass). Returns a number between 0 and 1.
+// We treat the load-line / triode block as having a flat passband and apply this filter
+// purely as an amplitude scaling on the grid swing — the simulator sees an "effective"
+// signal amplitude `state.amp * inputFilterGain(state.freq)`.
+function inputFilterGain(freq) {
+  let mag = 1;
+
+  // Low-frequency rolloff: input coupling cap Cc forms a high-pass with the grid leak Rg.
+  // f_lo = 1/(2π·Rg·Cc). Below f_lo signal is attenuated. Cc=0 ⇒ direct coupling, no filter.
+  if (state.cc > 0 && state.rg > 0) {
+    const fLo = 1 / (2 * Math.PI * state.rg * 1000 * state.cc * 1e-6);
+    const r = freq / fLo;
+    mag *= r / Math.sqrt(1 + r * r);
+  }
+
+  // High-frequency rolloff: grid stopper Rs forms a low-pass with the grid input
+  // capacitance C_in = Cgk + Cgp·(1 + |Av|). The Cgp·|Av| term is the famous Miller effect:
+  // the plate's antiphase swing makes the grid-to-plate capacitance look much bigger than
+  // its raw value. We use a constant Av estimate so the rolloff feels stable as the user
+  // changes other parameters — pedagogically more useful than chasing the simulator's
+  // instantaneous gain in a feedback loop.
+  if (state.rs > 0) {
+    const avEst = 50;
+    const cInputPf = CGK_PF + CGP_PF * (1 + avEst);
+    const fHi = 1e12 / (2 * Math.PI * state.rs * 1000 * cInputPf);  // Rs in Ω, C in pF
+    const r = freq / fHi;
+    mag *= 1 / Math.sqrt(1 + r * r);
+  }
+
+  return mag;
+}
+
+// AC operating point at the given phase. When the cathode is partially or fully bypassed
+// (effectiveRcath < state.rcath) the swing is computed with the reduced AC cathode
+// impedance, but the DC bias of the Q-point is preserved by injecting an equivalent
+// offset into the grid voltage. The returned Vp is shifted so the AC swing on the chart
+// still passes through the DC Q-point — i.e., the AC and DC load lines intersect at Q.
+function opAt(phase) {
+  const rkAc = effectiveRcath();
+  const ampEff = effectiveAmp();
+  if (rkAc < state.rcath - 1e-9) {
+    const qb = quiescent();
+    const vGridEff = qb.vgk + qb.ip * rkAc + ampEff * Math.sin(phase);
+    const r = solveOp(state.ht, state.rk, rkAc, vGridEff);
+    const shift = qb.ip * (state.rcath - rkAc);
+    return { ip: r.ip, vp: r.vp - shift, vgk: r.vgk };
+  }
+  return solveOp(state.ht, state.rk, state.rcath, gridDCNow() + ampEff * Math.sin(phase));
+}
 
 // When self-bias is active, the Vgk slider becomes a derived display, not an input.
 function syncDerivedVgk() {
@@ -326,10 +489,15 @@ function syncDerivedVgk() {
 // ---------- State ----------
 const state = {
   mode: "lesson",        // "lesson" | "sandbox"
-  tube: "12AX7",         // dual-triode type (selects μ and K)
+  tube: "12AX7",         // dual-triode type (selects μ, K, and Koren parameters)
   ht: 250,
   rk: 100,               // plate-load resistor in kΩ (a.k.a. R_a / R_L)
   rcath: 0,              // cathode resistor in kΩ (0 = fixed bias / cathode grounded)
+  ck: 0,                 // cathode bypass cap in μF (0 = unbypassed)
+  rs: 0,                 // grid stopper resistor in kΩ (0 = none)
+  cc: 0,                 // input coupling cap in μF (0 = direct DC coupling)
+  rg: 1000,              // grid leak resistor in kΩ (1 MΩ = canonical)
+  freq: 1000,            // input test frequency in Hz — drives all reactive-component math
   vgk: -1.5,             // grid-to-cathode bias in V (derived when rcath > 0)
   amp: 0,                // grid signal peak (V)
   speed: 1,
@@ -364,7 +532,7 @@ const LESSONS = [
 
            <p class="small">Adjust <b>V<sub>gk</sub></b> below to highlight one curve at a time, or switch the tube to compare families.</p>`,
     showLoadLine: false, showQ: false, showSignal: false, hideCurves: false,
-    lock: { tube: false, ht: true, rload: true, rcath: true, vgk: false, amp: true, speed: true },
+    lock: { tube: false, ht: true, rload: true, rcath: true, ck: true, rs: true, cc: true, freq: true, vgk: false, amp: true, speed: true },
   },
   {
     title: "2. Where does the load line come from?",
@@ -396,7 +564,7 @@ const LESSONS = [
       <p>That's a <b>straight line</b> on the I<sub>p</sub>/V<sub>p</sub> plane. Notice it has nothing to do with which tube is in the socket &mdash; it's just the constraint that the wires impose. That's the <b>load line</b>.</p>
       <p>Move <b>HT</b> and <b>R<sub>L</sub></b>. The line slides and tilts. The tube curves are hidden here on purpose, to make it obvious the line is defined entirely by the circuit.</p>`,
     showLoadLine: true, showQ: false, showSignal: false, hideCurves: true,
-    lock: { tube: true, ht: false, rload: false, rcath: true, vgk: true, amp: true, speed: true },
+    lock: { tube: true, ht: false, rload: false, rcath: true, ck: true, rs: true, cc: true, freq: true, vgk: true, amp: true, speed: true },
   },
   {
     title: "3. Reading the load line",
@@ -407,7 +575,7 @@ const LESSONS = [
            </ul>
            <p>Bigger <b>HT</b> shifts both endpoints outward. Bigger <b>R<sub>L</sub></b> drops the top endpoint, tilting the line about <code>(HT, 0)</code>. The slope is <code>&minus;1 / R<sub>L</sub></code>.</p>`,
     showLoadLine: true, showQ: false, showSignal: false, hideCurves: false,
-    lock: { tube: true, ht: false, rload: false, rcath: true, vgk: true, amp: true, speed: true },
+    lock: { tube: true, ht: false, rload: false, rcath: true, ck: true, rs: true, cc: true, freq: true, vgk: true, amp: true, speed: true },
   },
   {
     title: "4. Finding the Q-point",
@@ -415,7 +583,7 @@ const LESSONS = [
            <p>Move the <b>V<sub>gk</sub></b> slider. The Q-point slides along the (fixed) load line.</p>
            <p>Read off <code>V<sub>p,Q</sub></code> (the resting plate voltage) and <code>I<sub>p,Q</sub></code> (the resting plate current) from the readout in the upper-right.</p>`,
     showLoadLine: true, showQ: true, showSignal: false, hideCurves: false,
-    lock: { tube: true, ht: true, rload: true, rcath: true, vgk: false, amp: true, speed: true },
+    lock: { tube: true, ht: true, rload: true, rcath: true, ck: true, rs: true, cc: true, freq: true, vgk: false, amp: true, speed: true },
   },
   {
     title: "5. Reading a signal swing",
@@ -424,7 +592,7 @@ const LESSONS = [
            <p>Notice the polarity: when the grid goes <i>more positive</i>, plate current rises and the plate drops &mdash; <b>output is inverted</b>.</p>
            <p>Press <b>Play</b> to animate.</p>`,
     showLoadLine: true, showQ: true, showSignal: true, hideCurves: false,
-    lock: { tube: true, ht: true, rload: true, rcath: true, vgk: false, amp: false, speed: false },
+    lock: { tube: true, ht: true, rload: true, rcath: true, ck: true, rs: true, cc: true, freq: true, vgk: false, amp: false, speed: false },
     defaults: { amp: 0.5 },
   },
   {
@@ -436,7 +604,7 @@ const LESSONS = [
            </ul>
            <p>Pick R<sub>L</sub> too small and gain collapses. Too big and you starve the Q-point. The art of biasing is putting Q where you have headroom in both directions.</p>`,
     showLoadLine: true, showQ: true, showSignal: true, hideCurves: false,
-    lock: { tube: true, ht: true, rload: false, rcath: true, vgk: true, amp: false, speed: false },
+    lock: { tube: true, ht: true, rload: false, rcath: true, ck: true, rs: true, cc: true, freq: true, vgk: true, amp: false, speed: false },
     defaults: { amp: 0.5 },
   },
   {
@@ -449,7 +617,7 @@ const LESSONS = [
            <p>Watch the output waveform on the right flatten when the swing exceeds the available headroom on either side of the Q-point. That asymmetric clipping is the practical reason you spent all that effort placing the Q-point.</p>
            <p>That's the load line. You now know what it is, how to draw it, how to read off the Q-point, and how to use it to predict swing, gain, and clipping.</p>`,
     showLoadLine: true, showQ: true, showSignal: true, hideCurves: false,
-    lock: { tube: true, ht: false, rload: false, rcath: true, vgk: false, amp: false, speed: false },
+    lock: { tube: true, ht: false, rload: false, rcath: true, ck: true, rs: true, cc: true, freq: true, vgk: false, amp: false, speed: false },
     defaults: { amp: 2.0 },
   },
   {
@@ -483,8 +651,157 @@ const LESSONS = [
       <p>Two consequences. <b>DC:</b> the load line now uses <code>R<sub>a</sub>+R<sub>k</sub></code> for slope, and the V<sub>gk</sub> slider is locked &mdash; it's a <i>derived</i> readout, not a knob. <b>AC:</b> every time the input tries to push more current through, V<sub>k</sub> rises with it, eating into the V<sub>gk</sub> swing. Local negative feedback. Gain drops by roughly <code>1 / (1 + g<sub>m</sub>R<sub>k</sub>)</code>.</p>
       <p>Sweep <b>R<sub>k</sub></b> from 0 (back to fixed bias) up. Watch V<sub>gk</sub> and the Q-point self-adjust, and watch the gain readout fall as R<sub>k</sub> grows. Up next: a capacitor across R<sub>k</sub> to keep the DC bias but recover the AC gain.</p>`,
     showLoadLine: true, showQ: true, showSignal: true, hideCurves: false,
-    lock: { tube: true, ht: false, rload: false, rcath: false, vgk: true, amp: false, speed: false },
+    lock: { tube: true, ht: false, rload: false, rcath: false, ck: true, rs: true, cc: true, freq: true, vgk: true, amp: false, speed: false },
     defaults: { rcath: 1.5, amp: 0.5 },
+  },
+  {
+    title: "9. The cathode bypass capacitor",
+    body: `<p>Lesson 8 left us with a self-bias problem: the cathode resistor stabilizes the Q-point beautifully, but local feedback also <i>eats the AC gain</i>. The textbook fix is a capacitor across <code>R<sub>k</sub></code>:</p>
+      <svg class="schematic" viewBox="0 0 220 230" width="190" height="200" aria-hidden="true">
+        <text x="100" y="14" fill="#ffd34d" text-anchor="middle" font-size="11">+HT</text>
+        <line x1="100" y1="18" x2="100" y2="36" stroke="#d8dde5"/>
+        <polyline points="100,36 90,42 110,50 90,58 110,66 90,74 110,82 100,88"
+                  fill="none" stroke="#d8dde5" stroke-width="1.4"/>
+        <text x="116" y="65" fill="#a8ffb8" font-size="11">R&#8323;</text>
+        <line x1="100" y1="88" x2="100" y2="125" stroke="#d8dde5"/>
+        <circle cx="100" cy="138" r="24" fill="none" stroke="#d8dde5"/>
+        <line x1="88" y1="125" x2="112" y2="125" stroke="#d8dde5" stroke-width="1.6"/>
+        <line x1="86" y1="138" x2="114" y2="138" stroke="#d8dde5" stroke-dasharray="2,2"/>
+        <line x1="88" y1="151" x2="112" y2="151" stroke="#d8dde5" stroke-width="1.6"/>
+        <line x1="86" y1="138" x2="62" y2="138" stroke="#d8dde5"/>
+        <text x="42" y="142" fill="#9ad0ff" font-size="11">V&#x1D4F0;</text>
+        <line x1="100" y1="151" x2="100" y2="166" stroke="#d8dde5"/>
+        <polyline points="100,166 90,172 110,180 90,188 110,196 100,202"
+                  fill="none" stroke="#d8dde5" stroke-width="1.4"/>
+        <text x="116" y="186" fill="#ffd34d" font-size="11">R&#x2096;</text>
+        <line x1="100" y1="166" x2="160" y2="166" stroke="#d8dde5"/>
+        <line x1="156" y1="160" x2="156" y2="172" stroke="#d8dde5" stroke-width="1.8"/>
+        <line x1="164" y1="160" x2="164" y2="172" stroke="#d8dde5" stroke-width="1.8"/>
+        <text x="170" y="170" fill="#5fb4ff" font-size="11">C&#x2096;</text>
+        <line x1="160" y1="172" x2="160" y2="202" stroke="#d8dde5"/>
+        <line x1="100" y1="202" x2="160" y2="202" stroke="#d8dde5"/>
+        <line x1="100" y1="202" x2="100" y2="212" stroke="#d8dde5"/>
+        <line x1="90" y1="212" x2="110" y2="212" stroke="#d8dde5" stroke-width="1.6"/>
+        <line x1="93" y1="216" x2="107" y2="216" stroke="#d8dde5"/>
+        <line x1="96" y1="220" x2="104" y2="220" stroke="#d8dde5"/>
+      </svg>
+      <p><b>DC:</b> the cap is an open circuit. The bias loop is exactly as in lesson 8 &mdash; <code>V<sub>k</sub> = I<sub>p</sub>&middot;R<sub>k</sub></code>, Q-point self-stabilizing. <b>AC:</b> the cap presents impedance <code>1/(jωC<sub>k</sub>)</code>, which gets very small at audio frequencies. The cathode is no longer "tied" to ground through R<sub>k</sub>; it's shorted to ground through the cap. The local negative feedback that was reducing gain is gone, and the full &mu;-driven gain comes back.</p>
+      <p>The crossover is set by</p>
+      <p style="text-align:center"><code>f<sub>c</sub> = 1 / (2&pi; R<sub>k</sub> C<sub>k</sub>)</code></p>
+      <p>Below <code>f<sub>c</sub></code> the cap is "small" relative to R<sub>k</sub> and the stage degenerates. Above it, the cap dominates and you get full gain. With <code>R<sub>k</sub> = 1.5 k&Omega;</code> and a typical guitar-amp <code>C<sub>k</sub> = 22 &micro;F</code>, <code>f<sub>c</sub> &asymp; 5 Hz</code>, so the cap is "on" everywhere in the audio band.</p>
+      <p>Sweep the <b>C<sub>k</sub></b> slider from 0 up. The simulator computes the effective AC cathode impedance at 100 Hz: <code>|Z<sub>k</sub>| = R<sub>k</sub> / &radic;(1 + (&omega; R<sub>k</sub> C<sub>k</sub>)<sup>2</sup>)</code>. Watch what happens:</p>
+      <ul style="margin-top:-4px">
+        <li>Output trace gets <b>visibly taller</b> &mdash; gain has been restored.</li>
+        <li>The signal-swing locus on the load line traces a <b>shallower path</b> (slope &minus;1/R<sub>a</sub>) than the DC load line slope (&minus;1/(R<sub>a</sub>+R<sub>k</sub>)). The DC and AC load lines intersect at Q.</li>
+        <li>THD and especially the asymmetry index go <b>back up</b>. The local feedback was suppressing distortion; the cap takes that away too. There's no free lunch &mdash; the bypass cap trades headroom and linearity for raw gain.</li>
+      </ul>
+      <p>So: with R<sub>k</sub> alone you get self-biased linearity but lose gain. With R<sub>k</sub> + bypass cap you get gain back, at the cost of distortion. Real circuits often use a <i>partially</i> bypassed cathode (smaller cap that only bypasses above some chosen f<sub>c</sub>) to tune frequency response and distortion character &mdash; the so-called "cathode bypass tone control" in many vintage guitar-amp preamp stages.</p>`,
+    showLoadLine: true, showQ: true, showSignal: true, hideCurves: false,
+    lock: { tube: true, ht: false, rload: false, rcath: false, ck: false, rs: true, cc: true, freq: true, vgk: true, amp: false, speed: false },
+    defaults: { rcath: 1.5, ck: 22, amp: 0.5 },
+  },
+  {
+    title: "10. Grid stopper and the Miller effect",
+    body: `<p>Up to now we've assumed the grid is fed directly from the input source. Real circuits put a small resistor &mdash; the <b>grid stopper</b> R<sub>s</sub> &mdash; in series between the input and the grid. Its job is to suppress parasitic oscillation by damping the grid's tendency to ring. But its more audible effect is to roll off the high end.</p>
+      <svg class="schematic" viewBox="0 0 240 230" width="200" height="200" aria-hidden="true">
+        <text x="100" y="14" fill="#ffd34d" text-anchor="middle" font-size="11">+HT</text>
+        <line x1="100" y1="18" x2="100" y2="36" stroke="#d8dde5"/>
+        <polyline points="100,36 90,42 110,50 90,58 110,66 90,74 110,82 100,88"
+                  fill="none" stroke="#d8dde5" stroke-width="1.4"/>
+        <text x="116" y="65" fill="#a8ffb8" font-size="11">R&#8323;</text>
+        <line x1="100" y1="88" x2="100" y2="125" stroke="#d8dde5"/>
+        <circle cx="100" cy="138" r="24" fill="none" stroke="#d8dde5"/>
+        <line x1="88" y1="125" x2="112" y2="125" stroke="#d8dde5" stroke-width="1.6"/>
+        <line x1="86" y1="138" x2="114" y2="138" stroke="#d8dde5" stroke-dasharray="2,2"/>
+        <line x1="88" y1="151" x2="112" y2="151" stroke="#d8dde5" stroke-width="1.6"/>
+        <line x1="86" y1="138" x2="60" y2="138" stroke="#d8dde5"/>
+        <polyline points="60,138 54,132 46,144 38,132 30,144 22,132 16,138"
+                  fill="none" stroke="#d8dde5" stroke-width="1.4"/>
+        <text x="28" y="126" fill="#5fb4ff" font-size="11">R&#x209B;</text>
+        <line x1="16" y1="138" x2="6" y2="138" stroke="#d8dde5"/>
+        <text x="-6" y="134" fill="#9ad0ff" font-size="10">V&#x1D4F0;</text>
+        <line x1="100" y1="151" x2="100" y2="166" stroke="#d8dde5"/>
+        <polyline points="100,166 90,172 110,180 90,188 110,196 100,202"
+                  fill="none" stroke="#d8dde5" stroke-width="1.4"/>
+        <text x="116" y="186" fill="#ffd34d" font-size="11">R&#x2096;</text>
+        <line x1="100" y1="166" x2="160" y2="166" stroke="#d8dde5"/>
+        <line x1="156" y1="160" x2="156" y2="172" stroke="#d8dde5" stroke-width="1.8"/>
+        <line x1="164" y1="160" x2="164" y2="172" stroke="#d8dde5" stroke-width="1.8"/>
+        <text x="170" y="170" fill="#5fb4ff" font-size="11">C&#x2096;</text>
+        <line x1="160" y1="172" x2="160" y2="202" stroke="#d8dde5"/>
+        <line x1="100" y1="202" x2="160" y2="202" stroke="#d8dde5"/>
+        <line x1="100" y1="202" x2="100" y2="212" stroke="#d8dde5"/>
+        <line x1="90" y1="212" x2="110" y2="212" stroke="#d8dde5" stroke-width="1.6"/>
+        <line x1="93" y1="216" x2="107" y2="216" stroke="#d8dde5"/>
+        <line x1="96" y1="220" x2="104" y2="220" stroke="#d8dde5"/>
+      </svg>
+      <p>The grid isn't a perfect node: it has capacitance to the cathode (<code>C<sub>gk</sub></code>) and to the <i>plate</i> (<code>C<sub>gp</sub></code>). The plate capacitance is the troublemaker. Because the plate swings <i>opposite</i> to the grid (the stage inverts), every volt of grid swing has to push <code>C<sub>gp</sub></code> all the way to <code>(1 + |A<sub>v</sub>|)</code> volts on the other side. From the grid's point of view, <code>C<sub>gp</sub></code> looks like <code>(1 + |A<sub>v</sub>|)</code> times bigger than it really is. That's the <b>Miller effect</b>.</p>
+      <p>Total input capacitance:</p>
+      <p style="text-align:center"><code>C<sub>in</sub> = C<sub>gk</sub> + C<sub>gp</sub>(1 + |A<sub>v</sub>|)</code></p>
+      <p>For a 12AX7 with C<sub>gp</sub>&nbsp;&asymp;&nbsp;1.7 pF and a stage gain of ~50, C<sub>in</sub>&nbsp;&asymp;&nbsp;90 pF &mdash; modest in absolute terms but enough to bite when driven through a real source impedance. The grid stopper closes the loop: <code>R<sub>s</sub></code> and <code>C<sub>in</sub></code> form an RC low-pass with corner</p>
+      <p style="text-align:center"><code>f<sub>hi</sub> = 1 / (2&pi; R<sub>s</sub> C<sub>in</sub>)</code></p>
+      <p>Use the <b>Test frequency</b> slider to sweep f, and the <b>R<sub>s</sub></b> slider to dial the stopper in. With R<sub>s</sub>&nbsp;=&nbsp;68&nbsp;k&Omega; and C<sub>in</sub>&nbsp;&asymp;&nbsp;90&nbsp;pF, f<sub>hi</sub>&nbsp;&asymp;&nbsp;26&nbsp;kHz &mdash; right at the edge of audio. Make R<sub>s</sub> larger (say 470&nbsp;k&Omega;) and you'll see the output trace shrink as you sweep frequency up into the kHz range.</p>
+      <p>Guitar amps exploit this on purpose. A British "bright" channel uses a small grid stopper; an American "warm" channel uses a much larger one. Same tube, same supply, very different top end.</p>`,
+    showLoadLine: true, showQ: true, showSignal: true, hideCurves: false,
+    lock: { tube: true, ht: false, rload: false, rcath: false, ck: false, rs: false, cc: true, freq: false, vgk: true, amp: false, speed: false },
+    defaults: { rcath: 1.5, ck: 22, rs: 68, amp: 0.5, freq: 1000 },
+  },
+  {
+    title: "11. The coupling cap and grid leak",
+    body: `<p>One stage's plate sits at hundreds of volts of DC. The next stage's grid needs to be near 0&nbsp;V. So between stages you put a series <b>coupling capacitor</b> <code>C<sub>c</sub></code> that blocks DC but passes AC, and a <b>grid leak resistor</b> <code>R<sub>g</sub></code> that pulls the next grid to ground so it has a defined DC reference.</p>
+      <svg class="schematic" viewBox="0 0 260 230" width="220" height="200" aria-hidden="true">
+        <text x="100" y="14" fill="#ffd34d" text-anchor="middle" font-size="11">+HT</text>
+        <line x1="100" y1="18" x2="100" y2="36" stroke="#d8dde5"/>
+        <polyline points="100,36 90,42 110,50 90,58 110,66 90,74 110,82 100,88"
+                  fill="none" stroke="#d8dde5" stroke-width="1.4"/>
+        <text x="116" y="65" fill="#a8ffb8" font-size="11">R&#8323;</text>
+        <line x1="100" y1="88" x2="100" y2="125" stroke="#d8dde5"/>
+        <circle cx="100" cy="138" r="24" fill="none" stroke="#d8dde5"/>
+        <line x1="88" y1="125" x2="112" y2="125" stroke="#d8dde5" stroke-width="1.6"/>
+        <line x1="86" y1="138" x2="114" y2="138" stroke="#d8dde5" stroke-dasharray="2,2"/>
+        <line x1="88" y1="151" x2="112" y2="151" stroke="#d8dde5" stroke-width="1.6"/>
+        <line x1="86" y1="138" x2="74" y2="138" stroke="#d8dde5"/>
+        <polyline points="74,138 70,132 64,144 58,132 52,144 46,138"
+                  fill="none" stroke="#d8dde5" stroke-width="1.4"/>
+        <text x="50" y="126" fill="#5fb4ff" font-size="11">R&#x209B;</text>
+        <line x1="46" y1="138" x2="36" y2="138" stroke="#d8dde5"/>
+        <line x1="34" y1="132" x2="34" y2="144" stroke="#d8dde5" stroke-width="1.8"/>
+        <line x1="30" y1="132" x2="30" y2="144" stroke="#d8dde5" stroke-width="1.8"/>
+        <text x="14" y="128" fill="#5fb4ff" font-size="11">C&#x1D04;</text>
+        <line x1="30" y1="138" x2="20" y2="138" stroke="#d8dde5"/>
+        <text x="2" y="134" fill="#9ad0ff" font-size="10">V&#x1D4F0;</text>
+        <line x1="46" y1="138" x2="46" y2="170" stroke="#d8dde5"/>
+        <polyline points="46,170 40,176 52,184 40,192 46,198"
+                  fill="none" stroke="#d8dde5" stroke-width="1.4"/>
+        <text x="14" y="186" fill="#a8ffb8" font-size="10">R&#x1D4F0;</text>
+        <line x1="46" y1="198" x2="46" y2="208" stroke="#d8dde5"/>
+        <line x1="38" y1="208" x2="54" y2="208" stroke="#d8dde5" stroke-width="1.4"/>
+        <line x1="40" y1="212" x2="52" y2="212" stroke="#d8dde5"/>
+        <line x1="42" y1="216" x2="50" y2="216" stroke="#d8dde5"/>
+        <line x1="100" y1="151" x2="100" y2="166" stroke="#d8dde5"/>
+        <polyline points="100,166 90,172 110,180 90,188 110,196 100,202"
+                  fill="none" stroke="#d8dde5" stroke-width="1.4"/>
+        <text x="116" y="186" fill="#ffd34d" font-size="11">R&#x2096;</text>
+        <line x1="100" y1="166" x2="160" y2="166" stroke="#d8dde5"/>
+        <line x1="156" y1="160" x2="156" y2="172" stroke="#d8dde5" stroke-width="1.8"/>
+        <line x1="164" y1="160" x2="164" y2="172" stroke="#d8dde5" stroke-width="1.8"/>
+        <text x="170" y="170" fill="#5fb4ff" font-size="11">C&#x2096;</text>
+        <line x1="160" y1="172" x2="160" y2="202" stroke="#d8dde5"/>
+        <line x1="100" y1="202" x2="160" y2="202" stroke="#d8dde5"/>
+        <line x1="100" y1="202" x2="100" y2="212" stroke="#d8dde5"/>
+        <line x1="90" y1="212" x2="110" y2="212" stroke="#d8dde5" stroke-width="1.6"/>
+        <line x1="93" y1="216" x2="107" y2="216" stroke="#d8dde5"/>
+        <line x1="96" y1="220" x2="104" y2="220" stroke="#d8dde5"/>
+      </svg>
+      <p><b>DC behavior:</b> C<sub>c</sub> blocks DC, so whatever bias the previous stage's plate sits at never reaches the grid. R<sub>g</sub> bleeds the grid to ground, giving it a 0&nbsp;V reference for self-bias to work against. (This is the same R<sub>g</sub> we hand-waved past in lesson 8.) Together, they isolate stages from each other's high-voltage operating points.</p>
+      <p><b>AC behavior:</b> C<sub>c</sub> and R<sub>g</sub> form a series-cap-then-shunt-resistor structure &mdash; a first-order <b>high-pass filter</b>:</p>
+      <p style="text-align:center"><code>f<sub>lo</sub> = 1 / (2&pi; R<sub>g</sub> C<sub>c</sub>)</code></p>
+      <p>Signals well above f<sub>lo</sub> pass through with full amplitude; signals below f<sub>lo</sub> get attenuated 6 dB per octave. Typical Marshall-style values: R<sub>g</sub>&nbsp;=&nbsp;1&nbsp;M&Omega;, C<sub>c</sub>&nbsp;=&nbsp;0.022&nbsp;&micro;F &rArr; f<sub>lo</sub>&nbsp;&asymp;&nbsp;7&nbsp;Hz, well below audible. Tighten the cap to 0.001&nbsp;&micro;F or shrink R<sub>g</sub> to 100&nbsp;k&Omega; and the corner climbs into the audible bass range &mdash; the stage starts cutting low end.</p>
+      <p>Sweep the <b>C<sub>c</sub></b> slider and the <b>Test frequency</b> slider. With C<sub>c</sub>&nbsp;=&nbsp;0.022&nbsp;&micro;F and R<sub>g</sub>&nbsp;=&nbsp;1&nbsp;M&Omega;, dropping the test frequency from 1&nbsp;kHz to 5&nbsp;Hz makes the output trace shrink to nothing &mdash; the high-pass has rolled the signal off. Shrink C<sub>c</sub> to ~0.001&nbsp;&micro;F and the rolloff now appears in normal audio range. The grid stopper from lesson 10 is still in the picture too &mdash; you now have both a low-cut and a high-cut, bracketing the stage's usable passband.</p>
+      <p>The same filter pair appears between every stage of every tube amp. Tuning the corners is half of how guitar amps get their voicing &mdash; a stack of these rolloffs is what makes a Fender sound different from a Marshall sound different from a Vox.</p>`,
+    showLoadLine: true, showQ: true, showSignal: true, hideCurves: false,
+    lock: { tube: true, ht: false, rload: false, rcath: false, ck: false, rs: false, cc: false, freq: false, vgk: true, amp: false, speed: false },
+    defaults: { rcath: 1.5, ck: 22, rs: 68, cc: 0.022, rg: 1000, amp: 0.5, freq: 1000 },
   },
 ];
 
@@ -494,6 +811,8 @@ const plot   = $("plot");
 const ctx    = plot.getContext("2d");
 const wavesC = $("waves");
 const wctx   = wavesC.getContext("2d");
+const fftC   = $("fft");
+const fctx   = fftC.getContext("2d");
 
 function bindSlider(id, key, scale = 1) {
   const el = $(id);
@@ -506,9 +825,48 @@ function bindSlider(id, key, scale = 1) {
 bindSlider("ht",    "ht");
 bindSlider("rload", "rk");
 bindSlider("rcath", "rcath", 1/1000);   // slider in Ω, state.rcath kept in kΩ
+bindSlider("rs",    "rs");
+bindSlider("cc",    "cc");
+bindSlider("rg",    "rg");
 bindSlider("vgk",   "vgk");
 bindSlider("amp",   "amp");
 bindSlider("speed", "speed");
+
+// Cathode bypass cap slider is logarithmic: slider 0 = off (Ck = 0). Slider 1..100 maps
+// to 0.085 μF .. 47 μF via Ck = 10^(-1.07 + 0.02742·s), with the midpoint (s = 50) at
+// 2 μF. That puts the most-used guitar/hi-fi values (1 μF, 4.7 μF, 22 μF, 47 μF) at
+// useful, well-separated positions.
+const CK_LOG_A = -1.07004, CK_LOG_B = 0.02742;
+function ckFromSlider(s) {
+  if (s <= 0) return 0;
+  return Math.pow(10, CK_LOG_A + CK_LOG_B * s);
+}
+function sliderFromCk(ck) {
+  if (ck <= 0) return 0;
+  return (Math.log10(ck) - CK_LOG_A) / CK_LOG_B;
+}
+$("ck").addEventListener("input", () => {
+  const s = parseFloat($("ck").value);
+  state.ck = ckFromSlider(s);
+  syncLabels(); redraw();
+});
+
+// Frequency slider is logarithmic: slider value 0..40 maps to 10 Hz .. 100 kHz via
+// freq = 10^(1 + slider/10). State stores actual Hz.
+$("freq").addEventListener("input", () => {
+  const s = parseFloat($("freq").value);
+  state.freq = Math.pow(10, 1 + s / 10);
+  syncLabels(); redraw();
+});
+function setFreqSlider(freq) {
+  $("freq").value = 10 * (Math.log10(Math.max(1, freq)) - 1);
+}
+function formatFreq(f) {
+  if (f >= 10000) return (f / 1000).toFixed(0) + " kHz";
+  if (f >= 1000)  return (f / 1000).toFixed(2) + " kHz";
+  if (f >= 100)   return f.toFixed(0) + " Hz";
+  return f.toFixed(1) + " Hz";
+}
 
 $("playBtn").addEventListener("click", togglePlay);
 $("resetBtn").addEventListener("click", resetDefaults);
@@ -544,13 +902,30 @@ function gotoLesson(i) {
   if (L.defaults) {
     if ("amp"   in L.defaults) { state.amp   = L.defaults.amp;   $("amp").value   = state.amp;   }
     if ("rcath" in L.defaults) { state.rcath = L.defaults.rcath; $("rcath").value = state.rcath * 1000; }
+    if ("ck"    in L.defaults) { state.ck    = L.defaults.ck;    $("ck").value    = sliderFromCk(state.ck); }
+    if ("rs"    in L.defaults) { state.rs    = L.defaults.rs;    $("rs").value    = state.rs; }
+    if ("cc"    in L.defaults) { state.cc    = L.defaults.cc;    $("cc").value    = state.cc; }
+    if ("rg"    in L.defaults) { state.rg    = L.defaults.rg;    $("rg").value    = state.rg; }
+    if ("freq"  in L.defaults) { state.freq  = L.defaults.freq;  setFreqSlider(state.freq); }
   } else {
     if (!L.showSignal) { state.amp = 0; $("amp").value = 0; if (state.playing) togglePlay(); }
   }
-  // Stepping out of the self-bias lesson back into a fixed-bias one: zero R_k so
-  // the earlier lessons aren't silently running with cathode bias on.
+  // Stepping back into an earlier lesson: zero any later-lesson components that the
+  // current lesson locks, so they don't keep affecting the simulation silently.
   if (!("rcath" in (L.defaults || {})) && L.lock && L.lock.rcath) {
     state.rcath = 0; $("rcath").value = 0;
+  }
+  if (!("ck" in (L.defaults || {})) && L.lock && L.lock.ck) {
+    state.ck = 0; $("ck").value = 0;
+  }
+  if (!("rs" in (L.defaults || {})) && L.lock && L.lock.rs) {
+    state.rs = 0; $("rs").value = 0;
+  }
+  if (!("cc" in (L.defaults || {})) && L.lock && L.lock.cc) {
+    state.cc = 0; $("cc").value = 0;
+  }
+  if (!("freq" in (L.defaults || {})) && L.lock && L.lock.freq) {
+    state.freq = 1000; setFreqSlider(1000);
   }
   applyLessonGates();
   syncLabels(); redraw();
@@ -565,7 +940,7 @@ function applyLessonGates() {
   $("nextBtn").disabled = state.lesson === LESSONS.length - 1;
 
   const inLesson = state.mode === "lesson";
-  for (const key of ["tube","ht","rload","rcath","vgk","amp","speed"]) {
+  for (const key of ["tube","ht","rload","rcath","ck","rs","cc","rg","freq","vgk","amp","speed"]) {
     const ctrl = document.querySelector(`[data-ctrl="${key}"]`);
     const locked = inLesson && L.lock[key];
     ctrl.classList.toggle("locked", !!locked);
@@ -578,12 +953,15 @@ function applyLessonGates() {
 
 function resetDefaults() {
   state.tube = "12AX7";
-  state.ht = 250; state.rk = 100; state.rcath = 0;
+  state.ht = 250; state.rk = 100; state.rcath = 0; state.ck = 0;
+  state.rs = 0; state.cc = 0; state.rg = 1000; state.freq = 1000;
   state.vgk = -1.5; state.amp = 0; state.speed = 1;
   const tubeRadio = document.querySelector('input[name="tube"][value="12AX7"]');
   if (tubeRadio) tubeRadio.checked = true;
   applyTube();
-  $("ht").value = 250; $("rload").value = 100; $("rcath").value = 0;
+  $("ht").value = 250; $("rload").value = 100; $("rcath").value = 0; $("ck").value = 0;
+  $("rs").value = 0; $("cc").value = 0; $("rg").value = 1000;
+  setFreqSlider(1000);
   $("vgk").value = -1.5; $("amp").value = 0; $("speed").value = 1;
   if (state.playing) togglePlay();
   syncLabels(); redraw();
@@ -593,6 +971,14 @@ function syncLabels() {
   $("vHt").textContent    = state.ht.toFixed(0);
   $("vRload").textContent = state.rk.toFixed(0);
   $("vRcath").textContent = (state.rcath * 1000).toFixed(0);
+  $("vCk").textContent    = state.ck === 0 ? "0"
+                          : state.ck < 1   ? state.ck.toFixed(2)
+                          : state.ck < 10  ? state.ck.toFixed(1)
+                          :                  state.ck.toFixed(0);
+  $("vRs").textContent    = state.rs.toFixed(0);
+  $("vCc").textContent    = state.cc < 0.01 ? state.cc.toFixed(3) : state.cc.toFixed(2);
+  $("vRg").textContent    = state.rg.toFixed(0);
+  $("vFreq").textContent  = formatFreq(state.freq);
   $("vVgk").textContent   = state.vgk.toFixed(2);
   $("vAmp").textContent   = state.amp.toFixed(2);
   $("vSpeed").textContent = state.speed.toFixed(1) + "x";
@@ -675,7 +1061,220 @@ function redraw() {
   syncLabels();
   drawPlot();
   drawWaves();
+  drawFft();
   drawReadout();
+}
+
+// Iterative radix-2 Cooley-Tukey FFT, in-place on real/imag arrays of length n (power of 2).
+function fft(re, im) {
+  const n = re.length;
+  for (let i = 1, j = 0; i < n; i++) {
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) {
+      let t = re[i]; re[i] = re[j]; re[j] = t;
+          t = im[i]; im[i] = im[j]; im[j] = t;
+    }
+  }
+  for (let len = 2; len <= n; len <<= 1) {
+    const ang = -2 * Math.PI / len;
+    const wlenRe = Math.cos(ang), wlenIm = Math.sin(ang);
+    for (let i = 0; i < n; i += len) {
+      let wRe = 1, wIm = 0;
+      const half = len >> 1;
+      for (let j = 0; j < half; j++) {
+        const uRe = re[i + j], uIm = im[i + j];
+        const aRe = re[i + j + half], aIm = im[i + j + half];
+        const vRe = aRe * wRe - aIm * wIm;
+        const vIm = aRe * wIm + aIm * wRe;
+        re[i + j]        = uRe + vRe;
+        im[i + j]        = uIm + vIm;
+        re[i + j + half] = uRe - vRe;
+        im[i + j + half] = uIm - vIm;
+        const nWRe = wRe * wlenRe - wIm * wlenIm;
+        wIm = wRe * wlenIm + wIm * wlenRe;
+        wRe = nWRe;
+      }
+    }
+  }
+}
+
+function drawFft() {
+  const { w, h, ctx: c } = fitCanvas(fftC);
+  c.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--panel-2");
+  c.fillRect(0, 0, w, h);
+
+  const showSig = state.mode === "sandbox" || LESSONS[state.lesson].showSignal;
+  const metricsEl = $("hdMetrics");
+  if (!showSig || state.amp === 0) {
+    c.fillStyle = "#8a93a3"; c.font = "11px ui-sans-serif, system-ui";
+    c.fillText("(FFT of plate voltage appears when signal is applied)", 10, h/2);
+    if (metricsEl) metricsEl.classList.add("hidden");
+    return;
+  }
+
+  // Sample exactly one full cycle of the simulated output, N samples (power of 2 for FFT).
+  const N = 256;
+  const re = new Float64Array(N), im = new Float64Array(N);
+  let dc = 0, outMin = Infinity, outMax = -Infinity;
+  for (let i = 0; i < N; i++) {
+    const phase = (i / N) * 2 * Math.PI;
+    const v = opAt(phase).vp;
+    re[i] = v; im[i] = 0; dc += v;
+    if (v < outMin) outMin = v;
+    if (v > outMax) outMax = v;
+  }
+  dc /= N;
+  for (let i = 0; i < N; i++) re[i] -= dc;   // strip DC so bin 0 doesn't dominate
+
+  fft(re, im);
+
+  // Magnitudes (bins 1..N/2 cover fundamental + harmonics).
+  const M = 24;  // show fundamental + 23 harmonics
+  const mags = new Array(M + 1);
+  for (let i = 0; i <= M; i++) {
+    mags[i] = Math.sqrt(re[i] * re[i] + im[i] * im[i]);
+  }
+  const fund = Math.max(mags[1], 1e-9);
+
+  // THD = sqrt(sum of harmonic^2) / fundamental
+  let harmSq = 0;
+  for (let i = 2; i <= M; i++) harmSq += mags[i] * mags[i];
+  const thd = Math.sqrt(harmSq) / fund;
+
+  // Plot bars in dB relative to fundamental.
+  const padX = 30, padTop = 18, padBot = 16;
+  const plotW = w - padX - 8, plotH = h - padTop - padBot;
+  const dbMax = 5, dbMin = -60;
+  const dbToY = db => padTop + ((dbMax - db) / (dbMax - dbMin)) * plotH;
+
+  // Grid + scale labels (dB on the left).
+  c.strokeStyle = "#2c323d"; c.lineWidth = 1;
+  c.fillStyle   = "#8a93a3"; c.font = "10px ui-sans-serif, system-ui";
+  for (let db = 0; db >= dbMin; db -= 20) {
+    const y = dbToY(db);
+    c.beginPath(); c.moveTo(padX, y); c.lineTo(padX + plotW, y); c.stroke();
+    c.fillText(`${db}`, 4, y + 3);
+  }
+
+  // Bars.
+  const barSlot = plotW / M;
+  for (let i = 1; i <= M; i++) {
+    const m = mags[i];
+    const db = 20 * Math.log10(Math.max(m / fund, 1e-9));
+    if (db <= dbMin) continue;
+    const x = padX + (i - 1) * barSlot;
+    const y = dbToY(Math.min(db, dbMax));
+    const bw = Math.max(2, barSlot - 2);
+    const bh = padTop + plotH - y;
+    c.fillStyle = i === 1 ? "#ffd34d" : "#9ad0ff";
+    c.fillRect(x, y, bw, bh);
+  }
+
+  // Bin number labels along the bottom (every 4th, plus the fundamental).
+  c.fillStyle = "#8a93a3"; c.font = "9px ui-sans-serif, system-ui";
+  for (let i = 1; i <= M; i++) {
+    if (i === 1 || i === 2 || i % 4 === 0) {
+      const x = padX + (i - 1) * barSlot + barSlot / 2 - 3;
+      c.fillText(i.toString(), x, h - 4);
+    }
+  }
+
+  // Header: title only; numeric metrics are in the HTML panel below the canvas.
+  c.fillStyle = "#c1c8d4"; c.font = "11px ui-sans-serif, system-ui";
+  c.fillText("FFT of plate voltage (dB rel. to fundamental)", padX, 12);
+  if (metricsEl) {
+    updateHarmonicMetrics(mags, outMin, outMax, dc);
+    metricsEl.classList.remove("hidden");
+  }
+}
+
+// ---------- Harmonic metrics ----------
+// Root-sum-squared of a list of magnitudes. Stable to all-zero input.
+function rms(values) {
+  return Math.sqrt(values.reduce((s, v) => s + v * v, 0));
+}
+
+// Populate the harmonic-metrics panel from the array of bin magnitudes.
+// `mags[1]` is the fundamental, `mags[2..M]` are the harmonics.
+function updateHarmonicMetrics(mags, outMin, outMax, dc) {
+  const M = mags.length - 1;
+  const H1 = mags[1] || 0;
+  if (H1 < 1e-9) return;  // no real signal — leave previous values
+
+  const evens = [], odds = [], hashs = [];
+  for (let i = 2; i <= M; i++) {
+    (i % 2 === 0 ? evens : odds).push(mags[i]);
+    if (i >= 7) hashs.push(mags[i]);
+  }
+  const evenRms = rms(evens);
+  const oddRms  = rms(odds);
+  const hashRms = rms(hashs);
+  const thdRms  = rms(mags.slice(2));
+  const H2 = mags[2] || 0;
+  const H3 = mags[3] || 0;
+
+  // Even/odd balance in dB. Clamp the symbolic ±∞ cases so the display stays sane.
+  const eps = 1e-9 * H1;
+  let evenOddDb;
+  if (evenRms < eps && oddRms < eps)      evenOddDb = null;
+  else if (oddRms  < eps)                  evenOddDb =  40;
+  else if (evenRms < eps)                  evenOddDb = -40;
+  else evenOddDb = Math.max(-40, Math.min(40, 20 * Math.log10(evenRms / oddRms)));
+
+  // Output asymmetry: (peak+ − peak−) / (peak+ + peak−), peaks measured from the DC mean.
+  const peakPos = (outMax !== undefined) ? Math.max(0, outMax - dc) : 0;
+  const peakNeg = (outMin !== undefined) ? Math.max(0, dc - outMin) : 0;
+  const peakSum = peakPos + peakNeg;
+  const asym = peakSum > 1e-9 ? (peakPos - peakNeg) / peakSum : null;
+
+  // Effective harmonic order: power-weighted centroid over n=2..M.
+  let sumNumer = 0, sumDenom = 0;
+  for (let i = 2; i <= M; i++) {
+    const p = mags[i] * mags[i];
+    sumNumer += i * p;
+    sumDenom += p;
+  }
+  const effOrder = sumDenom > 1e-18 ? sumNumer / sumDenom : null;
+
+  const pct = v => `${(100 * v / H1).toFixed(2)} %`;
+  $("hdTHD").textContent  = pct(thdRms);
+  $("hdH2").textContent   = pct(H2);
+  $("hdH3").textContent   = pct(H3);
+  $("hdEven").textContent = pct(evenRms);
+  $("hdOdd").textContent  = pct(oddRms);
+  $("hdHash").textContent = pct(hashRms);
+
+  if (evenOddDb === null) {
+    $("hdBal").textContent = "—";
+  } else {
+    const sign = evenOddDb >= 0 ? "+" : "";
+    const tag  = Math.abs(evenOddDb) < 2 ? "balanced"
+               : evenOddDb > 0          ? "even-dominant"
+               :                          "odd-dominant";
+    $("hdBal").textContent = `${sign}${evenOddDb.toFixed(1)} dB  (${tag})`;
+  }
+
+  if (asym === null) {
+    $("hdAsym").textContent = "—";
+  } else {
+    const aPct  = asym * 100;
+    const aSign = aPct >= 0 ? "+" : "";
+    const aTag  = Math.abs(aPct) < 5 ? "symmetric"
+                : aPct > 0           ? "top-heavy"
+                :                      "bottom-heavy";
+    $("hdAsym").textContent = `${aSign}${aPct.toFixed(1)} %  (${aTag})`;
+  }
+
+  if (effOrder === null) {
+    $("hdEff").textContent = "—";
+  } else {
+    const tag = effOrder < 3 ? "warm"
+              : effOrder < 5 ? "mid"
+              :                "buzzy";
+    $("hdEff").textContent = `${effOrder.toFixed(2)}  (${tag})`;
+  }
 }
 
 function drawPlot() {
@@ -882,39 +1481,50 @@ function drawWaves() {
     outputs[i]  = q.vp;
   }
 
-  // Fixed scales (do NOT auto-fit) so amplitudes reflect real volts.
-  // Input band:  ±3 V full-scale (slider max). Smaller `amp` makes a smaller trace.
-  // Output band: ±HT/2 around the resting Q-point. So at fixed HT, a higher-gain
-  //   stage (e.g. larger R_L) produces a visibly taller output trace, capped when
-  //   the swing hits the rails (cutoff or saturation).
+  // Input stays on a fixed ±3 V scale (the slider's full range). The output band
+  // is auto-scaled to the actual peak deviation of the simulated cycle plus 10%
+  // headroom, so the entire output waveform is always on screen regardless of gain.
   const padX = 8;
-  const inMid    = 0;                          // input trace now centers on its own DC
-  const inRange  = 3.0;                        // volts at the band edge
+  const inMid    = 0;
+  const inRange  = 3.0;
   const outMid   = qBias.vp;
-  const outRange = Math.max(1, state.ht / 2);  // volts at the band edge
+  let outMaxDev = 0;
+  for (let i = 0; i < N; i++) {
+    const d = Math.abs(outputs[i] - outMid);
+    if (d > outMaxDev) outMaxDev = d;
+  }
+  const outRange = Math.max(0.5, outMaxDev * 1.1);
 
   function plotTrace(arr, mid, range, yc, yh, color) {
+    // Real-scope behavior: lift the pen when the signal goes off-band so off-screen
+    // excursions don't draw a deceptive flat-top "clip" along the band edge.
     c.strokeStyle = color; c.lineWidth = 1.5;
     c.beginPath();
+    let penDown = false;
     for (let i = 0; i < N; i++) {
+      const norm = (arr[i] - mid) / range;
+      if (norm < -1 || norm > 1) { penDown = false; continue; }
       const x = padX + (i / (N - 1)) * (w - 2 * padX);
-      const norm = clamp((arr[i] - mid) / range, -1, 1); // clip at band edges
       const y = yc - norm * yh;
-      if (i === 0) c.moveTo(x,y); else c.lineTo(x,y);
+      if (!penDown) { c.moveTo(x, y); penDown = true; }
+      else          { c.lineTo(x, y); }
     }
     c.stroke();
   }
 
-  // Faint zero-line (Q-point baseline) for each trace
+  // Single zero-line at the band centre; both traces are superimposed on it.
+  const yMid = h * 0.5;
+  const yHalf = h * 0.40;
   c.strokeStyle = "rgba(255,255,255,0.07)"; c.lineWidth = 1;
-  c.beginPath(); c.moveTo(padX, h*0.28); c.lineTo(w-padX, h*0.28); c.stroke();
-  c.beginPath(); c.moveTo(padX, h*0.72); c.lineTo(w-padX, h*0.72); c.stroke();
+  c.beginPath(); c.moveTo(padX, yMid); c.lineTo(w - padX, yMid); c.stroke();
 
-  plotTrace(inputs,  inMid,  inRange,  h * 0.28, h * 0.20, "#9ad0ff");
-  plotTrace(outputs, outMid, outRange, h * 0.72, h * 0.20, "#ffd34d");
+  plotTrace(inputs,  inMid,  inRange,  yMid, yHalf, "#9ad0ff");
+  plotTrace(outputs, outMid, outRange, yMid, yHalf, "#ffd34d");
 
-  c.fillStyle = "#8a93a3"; c.font = "10px ui-sans-serif, system-ui";
+  c.font = "10px ui-sans-serif, system-ui";
+  c.fillStyle = "#9ad0ff";
   c.fillText(`input Vg  (±${inRange.toFixed(0)} V full-scale)`,         padX, 11);
+  c.fillStyle = "#ffd34d";
   c.fillText(`output Vp (±${outRange.toFixed(0)} V around Q, inverted)`, padX, h - 4);
 
   // current-phase marker
