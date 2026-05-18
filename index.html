@@ -995,6 +995,7 @@ function gotoLesson(i) {
   if (!("freq" in (L.defaults || {})) && L.lock && L.lock.freq) {
     state.freq = 1000; setFreqSlider(1000);
   }
+  applyTube();
   applyLessonGates();
   syncLabels(); redraw();
 }
@@ -1055,7 +1056,7 @@ function syncLabels() {
   $("vSpeed").textContent = state.speed.toFixed(1) + "x";
   // Cutoff threshold helper: the tube conducts only when Vp + μ·Vgk > 0,
   // so plate current starts at Vp ≈ -μ·Vgk for negative bias.
-  $("vgkHintVal").textContent = (MU * Math.max(0, -state.vgk)).toFixed(0);
+  $("vgkHintVal").textContent = ((TUBES[state.tube] || TUBES["12AX7"]).mu * Math.max(0, -state.vgk)).toFixed(0);
 
   // Color the Vgk slider along a blackbody-ish cold→hot ramp:
   //   far left (-5 V, deep cutoff)   = deep navy
@@ -1475,7 +1476,8 @@ function drawPlot() {
 
   // Extend the X axis so the active plate curve is always on screen, even at very cold
   // biases (deep cutoff) where the curve only conducts above Vp ≈ -μ·Vgk.
-  const muCutoff = MU * Math.max(0, -state.vgk);
+  const tubeMu = (TUBES[state.tube] || TUBES["12AX7"]).mu;
+  const muCutoff = tubeMu * Math.max(0, -state.vgk);
   const xMax = Math.max(state.ht, muCutoff + 70, 100);
   const yM   = yMax(state.ht, state.rk, state.rcath);
   const rTot = state.rk + state.rcath;
@@ -1768,6 +1770,8 @@ function clamp(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
 
 // ---------- Init ----------
 function init() {
+  const checkedTube = document.querySelector('input[name="tube"]:checked');
+  if (checkedTube) state.tube = checkedTube.value;
   applyTube();
   setMode("lesson");
   gotoLesson(1);   // open on chapter 2 so the green load line is on screen immediately
